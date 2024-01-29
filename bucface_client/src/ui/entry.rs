@@ -22,13 +22,11 @@ pub fn entry_popup(frame: &mut Frame, app: &App) {
         .margin(2)
         .split(area);
 
-    let prompt = Paragraph::new(Text::styled(
-        "Name: ",
-        Style::default().fg(Color::White),
-    )).alignment(Alignment::Right);
+    let prompt = Paragraph::new(Text::styled("Name: ", Style::default().fg(Color::White)))
+        .alignment(Alignment::Right);
 
     let text = Paragraph::new(Text::styled(
-        app.buf.iter().collect::<String>(),
+        app.buf.iter().map(|x| char::from(*x)).collect::<String>(),
         Style::default().fg(Color::LightGreen),
     ))
     .wrap(Wrap::default());

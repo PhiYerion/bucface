@@ -31,7 +31,7 @@ fn logging_key_handler(app: &mut App) -> std::io::Result<()> {
                 app.buf.pop();
             }
             KeyCode::Char(c) => {
-                app.buf.push(c);
+                app.buf.push(c as u8);
             }
             _ => {}
         }
