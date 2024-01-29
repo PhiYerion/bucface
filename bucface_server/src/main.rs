@@ -80,8 +80,41 @@ mod tests {
     use serde::Serialize;
 
     #[actix_web::test]
+    async fn integration() {
+        let _ = env_logger::try_init();
+        let data = AppState::default();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(data.clone()))
+                .service(events)
+                .service(create_event),
+        )
+        .await;
+
+        let test_events: Events = rand::thread_rng().gen();
+
+        let mut body = Vec::new();
+        test_events
+            .serialize(&mut Serializer::new(&mut body))
+            .unwrap();
+        let req = test::TestRequest::post()
+            .uri("/events")
+            .set_payload(body.clone())
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::OK);
+
+        let req = test::TestRequest::get().uri("/events").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let decoded = rmp_serde::decode::from_slice::<Events>(&body).unwrap();
+        assert_eq!(decoded, test_events);
+    }
+
+    #[actix_web::test]
     async fn send_events() {
-        env_logger::init();
+        let _ = env_logger::try_init();
         let data = AppState::default();
         let app = test::init_service(
             App::new()
@@ -109,6 +142,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_events() {
+        let _ = env_logger::try_init();
         let test_events: Events = rand::thread_rng().gen();
         let data = AppState {
             events: Arc::new(Mutex::new(test_events)),
