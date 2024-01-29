@@ -1,3 +1,3 @@
 [workspace]
-members = [ "bucface_client", "bucface_server"]
+members = [ "bucface_client", "bucface_server", "bucface_utils"]
 resolver = "2"

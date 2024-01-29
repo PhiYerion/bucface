@@ -1,8 +1,9 @@
 mod app;
 mod input;
 mod ui;
-use std::io::stdout;
+mod logging;
 
+use std::io::stdout;
 use crossterm::event::DisableMouseCapture;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -14,22 +15,25 @@ use ratatui::Terminal;
 use self::app::App;
 use self::input::key_handler;
 
+use crate::logging::initialize_logging;
+use crate::ui::window_handler;
+
 #[allow(unreachable_code)]
 fn main() -> std::io::Result<()> {
-    env_logger::init();
-    log::debug!("Starting up");
+    initialize_logging().unwrap();
     let mut terminal = setup(CrosstermBackend::new(stdout()))?;
     let mut app = App::default();
-    log::debug!("Created app state and terminal");
+    if let Err(e) = terminal.draw(|f| window_handler(f, &app)) {
+    }
 
     loop {
         let _ = key_handler(&mut app);
         if app.mode == app::AppMode::Quitting {
-            log::debug!("Quitting");
             break;
         };
 
-        let _ = terminal.draw(|f| ui::ui(f, &app));
+        if let Err(e) = terminal.draw(|f| window_handler(f, &app)) {
+        }
     }
 
     disable_raw_mode()?;

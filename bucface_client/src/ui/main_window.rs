@@ -6,7 +6,7 @@ use ratatui::Frame;
 
 use crate::app::{App, AppMode};
 
-pub fn ui(frame: &mut Frame, app: &App) {
+pub fn main_window(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -19,6 +19,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
     create_title(chunks[0], frame, app);
     create_events(chunks[1], frame, app);
     create_nav(chunks[2], frame, app);
+
 }
 
 fn create_title(chunk: Rect, frame: &mut Frame, app: &App) {
@@ -55,6 +56,7 @@ fn create_nav(chunk: Rect, frame: &mut Frame, app: &App) {
     let mode_text = Text::styled(
         app.mode.to_string(),
         Style::default().fg(match app.mode {
+            AppMode::Entry => Color::Green,
             AppMode::Normal => Color::LightGreen,
             AppMode::Logging => Color::Yellow,
             AppMode::Quitting => Color::Red,
