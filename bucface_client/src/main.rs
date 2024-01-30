@@ -1,9 +1,8 @@
 mod app;
 mod input;
-mod ui;
 mod logging;
+mod ui;
 
-use std::io::stdout;
 use crossterm::event::DisableMouseCapture;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -11,6 +10,10 @@ use crossterm::terminal::{
 use crossterm::{execute, ExecutableCommand};
 use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::Terminal;
+use std::borrow::{Borrow, BorrowMut};
+use std::io::stdout;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use self::app::App;
 use self::input::key_handler;
@@ -19,21 +22,39 @@ use crate::logging::initialize_logging;
 use crate::ui::window_handler;
 
 #[allow(unreachable_code)]
-fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
     initialize_logging().unwrap();
     let mut terminal = setup(CrosstermBackend::new(stdout()))?;
-    let mut app = App::default();
-    if let Err(e) = terminal.draw(|f| window_handler(f, &app)) {
+    let app = Arc::new(App::default());
+
+    {
+        let _ = terminal.draw(|f| window_handler(f, &app));
+    }
+
+    {
+        tokio::spawn(async move {
+            loop {
+                let _ = key_handler(app).await;
+            }
+        });
+    }
+
+    {
+        let app = app.clone();
+        tokio::spawn(async move {
+            loop {
+                let _ = app.update().await;
+            }
+        });
     }
 
     loop {
-        let _ = key_handler(&mut app);
         if app.mode == app::AppMode::Quitting {
             break;
         };
 
-        if let Err(e) = terminal.draw(|f| window_handler(f, &app)) {
-        }
+        let _ = terminal.draw(|f| window_handler(f, &mut app));
     }
 
     disable_raw_mode()?;

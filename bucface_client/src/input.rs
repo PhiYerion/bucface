@@ -2,18 +2,18 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use crate::app::{App, AppMode};
 
-pub fn key_handler(app: &mut App) -> std::io::Result<()> {
+pub async fn key_handler<'a>(app: &App<'a>) -> std::io::Result<()> {
     match app.mode {
-        AppMode::Entry => logging_key_handler(app)?,
+        AppMode::Entry => logging_key_handler(app).await?,
         AppMode::Normal => normal_key_handler(app)?,
-        AppMode::Logging => logging_key_handler(app)?,
+        AppMode::Logging => logging_key_handler(app).await?,
         AppMode::Quitting => {}
     }
 
     Ok(())
 }
 
-fn logging_key_handler(app: &mut App) -> std::io::Result<()> {
+async fn logging_key_handler<'a>(app: &App<'a>) -> std::io::Result<()> {
     if let Event::Key(key) = event::read()? {
         if key.kind != KeyEventKind::Press {
             return Ok(());
@@ -21,17 +21,17 @@ fn logging_key_handler(app: &mut App) -> std::io::Result<()> {
 
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
-                app.mode = AppMode::Normal;
+                *app.mode.lock().unwrap() = AppMode::Normal.into();
                 return Ok(());
             }
             KeyCode::Enter => {
-                return app.send_buf();
+                return app.send_buf().await;
             }
             KeyCode::Backspace => {
-                app.buf.pop();
+                app.buf.lock().unwrap().pop();
             }
             KeyCode::Char(c) => {
-                app.buf.push(c as u8);
+                app.buf.lock().unwrap().push(c as u8);
             }
             _ => {}
         }

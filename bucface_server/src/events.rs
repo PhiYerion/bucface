@@ -5,20 +5,24 @@ use futures::StreamExt;
 use crate::AppState;
 
 // If you are wondering how we can "return" Events, it is serialized using Events's Responder implementation
-#[get("/events")]
-pub async fn get_events(data: web::Data<AppState>) -> Option<Events> {
-    match data.events.lock() {
-        Ok(events) => Some(events.clone()),
-        Err(_) => None,
-    }
+#[get("/events/{index}")]
+pub async fn get_events(path: web::Path<usize>, data: web::Data<AppState>) -> Option<Events> {
+    log::debug!("Got get request");
+    let index = path.into_inner();
+    let events = data.events.lock().ok()?;
+
+    Some(Events {
+        inner: events.inner.get(index..)?.to_vec(),
+    })
 }
 
 const MAX_SIZE: usize = 1_048_576; // max payload size is 1M
-#[post("/events")]
+#[post("/events/create")]
 pub async fn create_event(
     mut payload: web::Payload,
     data: web::Data<AppState>,
 ) -> Result<HttpResponse, actix_web::Error> {
+    log::debug!("Got post request");
     let mut body = web::BytesMut::new();
     while let Some(chunk) = payload.next().await {
         let chunk = chunk?;

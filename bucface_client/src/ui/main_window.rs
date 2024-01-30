@@ -6,7 +6,7 @@ use ratatui::Frame;
 
 use crate::app::{App, AppMode};
 
-pub fn main_window(frame: &mut Frame, app: &App) {
+pub fn main_window<'a>(frame: &mut Frame<'a>, app: &App<'a>) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -36,8 +36,9 @@ fn create_title(chunk: Rect, frame: &mut Frame, app: &App) {
     frame.render_widget(title, chunk);
 }
 
-fn create_events(chunk: Rect, frame: &mut Frame, app: &App) {
-    let list_items = app.human_events.iter().map(|event| {
+async fn create_events<'a>(chunk: Rect, frame: &mut Frame<'a>, app: &App<'a>) {
+    let events = app.events.lock().await;
+    let list_items = events.iter().map(|event| {
         let text = Text::styled(
             format!(
                 "{:?} | {}@{}: {}",

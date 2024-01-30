@@ -1,6 +1,7 @@
 mod events;
 use std::sync::{Arc, Mutex};
 
+use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use bucface_utils::Events;
 use events::get_events;
@@ -14,7 +15,8 @@ struct AppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let data = AppState::default();
+    env_logger::init();
+    let data = Data::new(AppState::default());
     HttpServer::new(move || {
         App::new()
             .service(get_events)

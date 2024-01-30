@@ -29,11 +29,10 @@ pub fn log_popup(frame: &mut Frame, app: &App) {
         .split(area);
 
     let input_text = Paragraph::new(Text::styled(
-        app.buf.iter().collect::<String>(),
+        app.buf.iter().map(|x| char::from(*x)).collect::<String>(),
         Style::default().fg(Color::LightGreen),
     ))
     .wrap(Wrap::default());
-
 
     frame.render_widget(popup_block, area);
     frame.render_widget(input_text, chunk[0]);
