@@ -1,6 +1,7 @@
 mod app;
 mod input;
 mod logging;
+mod net;
 mod ui;
 
 use crossterm::event::DisableMouseCapture;

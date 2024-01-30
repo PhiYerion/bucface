@@ -2,7 +2,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use crate::app::{App, AppMode};
 
-pub async fn key_handler<'a>(app: &App<'a>) -> std::io::Result<()> {
+pub async fn key_handler<'a>(app: &mut App<'a>) -> std::io::Result<()> {
     match app.mode {
         AppMode::Entry => logging_key_handler(app).await?,
         AppMode::Normal => normal_key_handler(app)?,
@@ -13,7 +13,7 @@ pub async fn key_handler<'a>(app: &App<'a>) -> std::io::Result<()> {
     Ok(())
 }
 
-async fn logging_key_handler<'a>(app: &App<'a>) -> std::io::Result<()> {
+async fn logging_key_handler<'a>(app: &mut App<'a>) -> std::io::Result<()> {
     if let Event::Key(key) = event::read()? {
         if key.kind != KeyEventKind::Press {
             return Ok(());
@@ -21,7 +21,7 @@ async fn logging_key_handler<'a>(app: &App<'a>) -> std::io::Result<()> {
 
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
-                *app.mode.lock().unwrap() = AppMode::Normal.into();
+                *app.mode = AppMode::Normal.into();
                 return Ok(());
             }
             KeyCode::Enter => {
