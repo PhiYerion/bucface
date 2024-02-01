@@ -7,7 +7,7 @@ use main_window::main_window;
 
 use crate::app::{App, AppMode};
 
-pub fn window_handler(frame: &mut Frame, app: &App) {
+pub fn window_handler<'a>(frame: &mut Frame<'a>, app: &App<'a>) {
     main_window(frame, app);
 
     match app.mode {

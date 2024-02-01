@@ -1,9 +1,11 @@
-use std::future::Future;
+use std::future::{Future, IntoFuture};
+use std::pin::{pin, Pin};
 
 use bucface_utils::{Event, Events};
 use reqwest::StatusCode;
+use tokio::task::JoinHandle;
 
-use crate::net::sync::{get_events, send_event};
+use crate::net::sync::{get_events, send_event, SendEventError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppMode {
@@ -30,15 +32,13 @@ impl Default for AppMode {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct App<'a> {
     pub events: Vec<Event>,
     pub machines: Vec<&'a str>,
     pub name: Box<str>,
     pub buf: Vec<u8>,
     pub mode: AppMode,
-    get_events: Option<tokio::task::JoinHandle<Future<Output = Result<Events, UpdateLogsError>>>>,
-    send_event: Option<tokio::task::JoinHandle<()>>,
     client: reqwest::Client,
 }
 
@@ -51,7 +51,7 @@ pub enum UpdateLogsError {
 }
 
 impl App<'_> {
-    pub(crate) async fn send_buf(&mut self) -> Option<tokio::task::JoinHandle<()>> {
+    pub(crate) fn send_buf(&mut self) -> Option<impl Future> {
         let mode = self.mode;
         self.mode = AppMode::Normal;
 
@@ -61,11 +61,11 @@ impl App<'_> {
                 None
             }
             AppMode::Logging => Some(self.send_buf_as_log()),
-            AppMode::Quitting | AppMode::Normal => None,
+            AppMode::Quitting | AppMode::Normal => { None },
         }
     }
 
-    fn send_buf_as_log(&self) -> tokio::task::JoinHandle<()> {
+    fn send_buf_as_log(&mut self) -> impl Future {
         let log = Event {
             author: self.name.clone(),
             machine: "test".into(),
@@ -79,19 +79,17 @@ impl App<'_> {
         };
         self.buf.clear();
 
-        tokio::spawn(async {
-            send_event(log, "http://127.0.0.1:8080/events", self.client, 10).await;
-        })
+        let client = self.client.clone();
+        tokio::spawn(
+            async move { send_event(log, "http://127.0.0.1:8080/events/create", &client, 10).await }
+        )
     }
 
-    async fn update_logs(
-        &self,
-    ) -> tokio::task::JoinHandle<impl Future<Output = Result<Events, UpdateLogsError>>> {
+    pub fn update_logs(&self) -> impl Future<Output = Result<Events, UpdateLogsError>> {
         let client = self.client.clone();
         let len = self.events.len();
-        tokio::spawn(
-            async move { get_events("http://127.0.0.1:8080/events".to_string(), client, len) },
-        )
+
+        async move { get_events("http://127.0.0.1:8080/events".to_string(), client, len).await }
     }
 
     /* pub async fn update(&self) -> Result<(), UpdateLogsError> {
@@ -132,6 +130,6 @@ mod tests {
         };
         let message = "test message".bytes();
         app.buf.extend(message);
-        app.send_buf_as_log().await.unwrap();
+        app.send_buf_as_log().await;
     }
 }

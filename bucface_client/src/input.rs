@@ -1,49 +1,46 @@
+use std::future::Future;
+
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use crate::app::{App, AppMode};
 
-pub async fn key_handler<'a>(app: &mut App<'a>) -> std::io::Result<()> {
+pub fn key_handler(app: &mut App) {
     match app.mode {
-        AppMode::Entry => logging_key_handler(app).await?,
-        AppMode::Normal => normal_key_handler(app)?,
-        AppMode::Logging => logging_key_handler(app).await?,
+        AppMode::Entry => logging_key_handler(app),
+        AppMode::Logging => logging_key_handler(app),
+        AppMode::Normal => normal_key_handler(app),
         AppMode::Quitting => {}
     }
-
-    Ok(())
 }
 
-async fn logging_key_handler<'a>(app: &mut App<'a>) -> std::io::Result<()> {
-    if let Event::Key(key) = event::read()? {
+fn logging_key_handler(app: &mut App) {
+    if let Ok(Event::Key(key)) = event::read() {
         if key.kind != KeyEventKind::Press {
-            return Ok(());
+            return;
         }
 
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
-                *app.mode = AppMode::Normal.into();
-                return Ok(());
+                app.mode = AppMode::Normal;
             }
             KeyCode::Enter => {
-                return app.send_buf().await;
+                 app.send_buf();
             }
             KeyCode::Backspace => {
-                app.buf.lock().unwrap().pop();
+                app.buf.pop();
             }
             KeyCode::Char(c) => {
-                app.buf.lock().unwrap().push(c as u8);
+                app.buf.push(c as u8);
             }
             _ => {}
         }
     }
-
-    Ok(())
 }
 
-fn normal_key_handler(app: &mut App) -> std::io::Result<()> {
-    if let Event::Key(key) = event::read()? {
+fn normal_key_handler(app: &mut App) {
+    if let Ok(Event::Key(key)) = event::read() {
         if key.kind != KeyEventKind::Press {
-            return Ok(());
+            return;
         }
 
         match key.code {
@@ -56,6 +53,4 @@ fn normal_key_handler(app: &mut App) -> std::io::Result<()> {
             _ => {}
         }
     }
-
-    Ok(())
 }

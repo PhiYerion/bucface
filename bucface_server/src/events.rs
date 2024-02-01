@@ -11,9 +11,12 @@ pub async fn get_events(path: web::Path<usize>, data: web::Data<AppState>) -> Op
     let index = path.into_inner();
     let events = data.events.lock().ok()?;
 
-    Some(Events {
+    let res = Some(Events {
         inner: events.inner.get(index..)?.to_vec(),
-    })
+    });
+    log::debug!("Returning {} events", res.as_ref().unwrap().inner.len());
+
+    res
 }
 
 const MAX_SIZE: usize = 1_048_576; // max payload size is 1M

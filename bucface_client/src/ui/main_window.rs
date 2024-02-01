@@ -35,7 +35,7 @@ fn create_title(chunk: Rect, frame: &mut Frame, app: &App) {
     frame.render_widget(title, chunk);
 }
 
-async fn create_events<'a>(chunk: Rect, frame: &mut Frame<'a>, app: &App<'a>) {
+fn create_events<'a>(chunk: Rect, frame: &mut Frame<'a>, app: &App<'a>) {
     let list_items = app.events.iter().map(|event| {
         let text = Text::styled(
             format!(
