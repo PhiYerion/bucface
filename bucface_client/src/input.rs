@@ -1,31 +1,8 @@
-use std::future::Future;
 use std::time::Duration;
 
-use crossterm::event::{self, poll, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, poll, Event, KeyCode, KeyEventKind};
 
 use crate::app::{App, AppMode};
-
-struct EventHandler {
-    rx: tokio::sync::mpsc::UnboundedReceiver<Event>
-}
-
-impl EventHandler {
-    pub fn new() -> Self {
-        let tick_rate = std::time::Duration::from_millis(250);
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(async move {
-            loop {
-                if crossterm::event::poll(tick_rate).unwrap() {
-                    if let Ok(event) = crossterm::event::read() {
-                        tx.send(event).unwrap();
-                    }
-                }
-            }
-        });
-
-        Self { rx }
-    }
-}
 
 pub fn key_handler(app: &mut App) {
     if let Ok(true) = poll(Duration::from_millis(10)) {

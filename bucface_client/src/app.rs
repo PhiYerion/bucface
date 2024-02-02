@@ -1,11 +1,9 @@
-use std::future::{Future, IntoFuture};
-use std::pin::{pin, Pin};
+use std::future::Future;
 
 use bucface_utils::{Event, Events};
 use reqwest::StatusCode;
-use tokio::task::JoinHandle;
 
-use crate::net::sync::{get_events, send_event, SendEventError};
+use crate::net::sync::{get_events, send_event};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppMode {
@@ -47,7 +45,6 @@ pub enum UpdateLogsError {
     Reqwest(reqwest::Error),
     Rmp(rmp_serde::decode::Error),
     InvalidStatusCode(StatusCode),
-    NoChange,
 }
 
 impl App<'_> {
@@ -57,7 +54,7 @@ impl App<'_> {
 
         match mode {
             AppMode::Entry => {
-                self.buf_to_name();
+                let _ = self.buf_to_name();
                 None
             }
             AppMode::Logging => Some(self.send_buf_as_log()),
@@ -125,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn send_buf_as_log() {
         let mut app = App {
-            mode: AppMode::Logging.into(),
+            mode: AppMode::Logging,
             ..Default::default()
         };
         let message = "test message".bytes();
