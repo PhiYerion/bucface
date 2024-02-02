@@ -1,5 +1,5 @@
 use chrono::Local;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
@@ -7,11 +7,7 @@ use ratatui::Frame;
 
 use crate::app::App;
 
-use super::centered_rect;
-
-pub fn log_popup(frame: &mut Frame, app: &App) {
-    let area = centered_rect(frame.size(), 60, 40);
-
+pub fn log_popup(area: Rect, frame: &mut Frame, app: &App) {
     let popup_block = Block::default()
         .title(format!(
             "{}'s Log | {:?} | word count: {}",
@@ -20,10 +16,10 @@ pub fn log_popup(frame: &mut Frame, app: &App) {
             app.buf.len()
         ))
         .borders(Borders::ALL)
-        .style(Style::default());
+        .style(Style::default().bg(Color::Rgb(12, 4, 4)));
 
     let chunk = Layout::default()
-        .direction(Direction::Vertical)
+        .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(80)])
         .margin(2)
         .split(area);

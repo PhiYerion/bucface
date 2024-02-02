@@ -1,20 +1,17 @@
-use ratatui::layout::{Alignment, Constraint, Direction, Layout};
-use ratatui::style::{Color, Style};
+use color_eyre::owo_colors::OwoColorize;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::app::App;
 
-use super::centered_rect;
-
-pub fn entry_popup(frame: &mut Frame, app: &App) {
-    let area = centered_rect(frame.size(), 80, 60);
-
+pub fn entry(area: Rect, frame: &mut Frame, app: &App) {
     let popup_block = Block::default()
         .title("Login")
         .borders(Borders::ALL)
-        .style(Style::default());
+        .style(Style::default().bg(Color::Rgb(12, 4, 4)));
 
     let chunk = Layout::default()
         .direction(Direction::Horizontal)

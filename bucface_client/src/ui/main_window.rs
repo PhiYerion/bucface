@@ -6,6 +6,9 @@ use ratatui::Frame;
 
 use crate::app::{App, AppMode};
 
+use super::entry_block::entry;
+use super::log_block::log_popup;
+
 pub fn main_window<'a>(frame: &mut Frame<'a>, app: &App<'a>) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -16,8 +19,29 @@ pub fn main_window<'a>(frame: &mut Frame<'a>, app: &App<'a>) {
         ])
         .split(frame.size());
 
+    let half_chunks = || Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(chunks[1]);
+
     create_title(chunks[0], frame, app);
-    create_events(chunks[1], frame, app);
+
+
+    match app.mode {
+        AppMode::Normal => create_events(chunks[1], frame, app),
+        AppMode::Entry => {
+            let half_chunks = half_chunks();
+            create_events(half_chunks[0], frame, app);
+            entry(half_chunks[1], frame, app);
+        }
+        AppMode::Logging => {
+            let half_chunks = half_chunks();
+            create_events(half_chunks[0], frame, app);
+            log_popup(half_chunks[1], frame, app);
+        }
+        AppMode::Quitting => {}
+    }
+
     create_nav(chunks[2], frame, app);
 }
 

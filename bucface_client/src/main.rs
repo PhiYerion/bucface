@@ -6,20 +6,17 @@ mod net;
 mod ui;
 
 use bucface_utils::Events;
-use futures::future::FutureExt;
 use crossterm::event::DisableMouseCapture;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use crossterm::{execute, ExecutableCommand};
+use futures::future::FutureExt;
 use parking_lot::Mutex;
 use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::Terminal;
-use std::future::{Future, IntoFuture};
 use std::io::stdout;
-use std::pin::pin;
 use std::sync::Arc;
-use std::task::Context;
 
 use self::app::App;
 use self::input::key_handler;
@@ -69,7 +66,7 @@ async fn main() -> std::io::Result<()> {
 }
 
 fn get_new_events(app: &App, new_events: Arc<Mutex<Events>>) {
-    let future = app.update_logs().then( |result| async move {
+    let future = app.update_logs().then(|result| async move {
         if let Ok(events) = result {
             new_events.lock().inner = events.inner;
         }
