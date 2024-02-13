@@ -1,3 +1,7 @@
+use std::future::Future;
+
+use crate::net::sync::send_event;
+
 #[derive(Default)]
 pub struct App {
     log_buf: String,
@@ -38,6 +42,16 @@ fn body(ui: &mut egui::Ui, log_buf: &mut String) {
     });
 }
 
-fn send_log_entry(log_buf: &str) {
-    println!("{}", log_buf);
+fn send_log_entry(log_buf: &str) -> impl Future<Output = Result<(), crate::net::sync::SendEventError>> {
+    let event = bucface_utils::Event {
+        time: chrono::Utc::now().naive_utc(),
+        author: "test".into(),
+        event: log_buf.into(),
+        machine: "test".into(),
+
+    };
+
+    let client = reqwest::Client::new();
+
+    send_event(event, "http://127.0.0.1:8080/events/create", &client.clone(), 10)
 }

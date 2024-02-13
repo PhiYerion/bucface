@@ -1,12 +1,6 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::Poll;
-
 use bucface_utils::{Event, Events};
 use rmp_serde::Serializer;
 use serde::Serialize;
-
-use crate::app::UpdateLogsError;
 
 pub enum SendEventError {
     EncodeError(rmp_serde::encode::Error),
@@ -76,6 +70,14 @@ impl Future for GetEventsFuture {
     }
 }
 */
+
+#[derive(Debug)]
+pub enum UpdateLogsError {
+    Reqwest(reqwest::Error),
+    InvalidStatusCode(reqwest::StatusCode),
+    Rmp(rmp_serde::decode::Error),
+}
+
 pub async fn get_events(
     server: String,
     client: reqwest::Client,
