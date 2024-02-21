@@ -1,5 +1,6 @@
 mod app;
 mod net;
+mod ui;
 use app::App;
 
 #[tokio::main]
