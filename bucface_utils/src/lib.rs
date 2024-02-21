@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[cfg(feature = "actix")]
 use actix_web::body::BoxBody;
 #[cfg(feature = "actix")]

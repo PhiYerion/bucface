@@ -16,3 +16,4 @@ serde = "1.0.196"
 tokio = "1.36.0"
 bucface_utils = { path = "../bucface_utils" }
 chrono = "0.4.34"
+parking_lot = "0.12.1"

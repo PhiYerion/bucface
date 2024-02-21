@@ -2,7 +2,8 @@ mod app;
 mod net;
 use app::App;
 
-fn main() -> Result<(), eframe::Error> {
+#[tokio::main]
+async fn main() -> Result<(), eframe::Error> {
     env_logger::init();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default(),
@@ -15,4 +16,3 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(|_cc| Box::<App>::default()),
     )
 }
-

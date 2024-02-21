@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use bucface_utils::{Event, Events};
 use rmp_serde::Serializer;
 use serde::Serialize;
 
+#[derive(Debug)]
 pub enum SendEventError {
     EncodeError(rmp_serde::encode::Error),
     RequestError(reqwest::Error),
@@ -11,7 +14,7 @@ pub enum SendEventError {
 pub async fn send_event(
     event: Event,
     server: &str,
-    client: &reqwest::Client,
+    client: Arc<reqwest::Client>,
     max_tries: usize,
 ) -> Result<(), SendEventError> {
     log::info!("Sending event: {:?}", event);
@@ -80,9 +83,9 @@ pub enum UpdateLogsError {
 
 pub async fn get_events(
     server: String,
-    client: reqwest::Client,
+    client: &reqwest::Client,
     start_index: usize,
-) -> Result<Events, UpdateLogsError> {
+) -> Result<Vec<Event>, UpdateLogsError> {
     let url = server + "/" + &start_index.to_string();
     log::info!("Getting events with url: {}", url);
     let res = client.get(url).send().await.map_err(|e| {
@@ -97,5 +100,11 @@ pub async fn get_events(
     let bytes = res.bytes().await.map_err(UpdateLogsError::Reqwest)?;
     log::info!("Got events: {:?}", bytes);
 
-    rmp_serde::from_slice::<Events>(&bytes).map_err(UpdateLogsError::Rmp)
+    match rmp_serde::from_slice::<Events>(&bytes).map_err(UpdateLogsError::Rmp) {
+        Ok(events) => Ok(events.inner),
+        Err(e) => {
+            log::error!("Error decoding events: {:?}", e);
+            Err(e)
+        }
+    }
 }

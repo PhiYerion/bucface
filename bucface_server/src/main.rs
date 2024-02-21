@@ -1,4 +1,5 @@
 mod events;
+mod other_pages;
 use std::sync::{Arc, Mutex};
 
 use actix_web::web::Data;
@@ -6,6 +7,7 @@ use actix_web::{App, HttpServer};
 use bucface_utils::Events;
 use events::get_events;
 
+use crate::other_pages::home;
 use self::events::create_event;
 
 #[derive(Debug, Clone, Default)]
@@ -19,6 +21,7 @@ async fn main() -> std::io::Result<()> {
     let data = Data::new(AppState::default());
     HttpServer::new(move || {
         App::new()
+            .service(home)
             .service(get_events)
             .service(create_event)
             .app_data(data.clone())
