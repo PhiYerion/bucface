@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bucface_utils::{Event, Events};
 use rmp_serde::Serializer;
 use serde::Serialize;
@@ -11,7 +13,7 @@ pub enum SendEventError {
 pub async fn send_event(
     event: Event,
     server: &str,
-    client: &reqwest::Client,
+    client: Arc<reqwest::Client>,
     max_tries: usize,
 ) -> Result<(), SendEventError> {
     log::info!("Sending event: {:?}", event);
@@ -94,6 +96,7 @@ pub async fn get_events(
         log::error!("Error getting events: {:?}", error);
         return error;
     }
+
     let bytes = res.bytes().await.map_err(UpdateLogsError::Reqwest)?;
     log::info!("Got events: {:?}", bytes);
 

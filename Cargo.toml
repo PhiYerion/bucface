@@ -1,3 +1,15 @@
 [workspace]
 members = [ "bucface_client", "bucface_server", "bucface_utils"]
 resolver = "2"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 'z'
+debug = false
+strip = 'all'
+lto = true
+codegen-units = 1
+

@@ -2,9 +2,20 @@ mod app;
 mod net;
 use app::App;
 
-fn main() -> Result<(), eframe::Error> {
+use crate::net::ws_client::{self, verify_conn};
+
+#[tokio::main]
+async fn main() -> Result<(), eframe::Error> {
     env_logger::init();
-    let options = eframe::NativeOptions {
+    let mut ws_client = ws_client::start("ws://127.0.0.1:8080").await;
+    log::trace!("Connected to {}", "127.0.0.1:8080");
+
+    while let Some(msg) = ws_client.receiver.rx.recv().await {
+        log::trace!("Received: {msg:?}");
+    }
+
+    Ok(())
+    /* let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default(),
         ..Default::default()
     };
@@ -13,6 +24,5 @@ fn main() -> Result<(), eframe::Error> {
         "Confirm exit",
         options,
         Box::new(|_cc| Box::<App>::default()),
-    )
+    ) */
 }
-

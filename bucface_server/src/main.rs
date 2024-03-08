@@ -1,4 +1,5 @@
 mod events;
+mod websocket;
 use std::sync::{Arc, Mutex};
 
 use actix_web::web::Data;
@@ -16,7 +17,7 @@ struct AppState {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
-    let data = Data::new(AppState::default());
+    /* let data = Data::new(AppState::default());
     HttpServer::new(move || {
         App::new()
             .service(get_events)
@@ -26,6 +27,9 @@ async fn main() -> std::io::Result<()> {
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
+    */
+
+    websocket::start().await
 }
 
 #[cfg(test)]
