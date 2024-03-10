@@ -1,25 +1,58 @@
 use bucface_utils::Event;
+use futures_util::TryFutureExt;
+use tokio::task::JoinHandle;
 
-use crate::net::ws_client::WsClient;
+use crate::net::ws_client::{WebSocketError, WsClient};
+use crate::ui::main_window::body;
 
-pub struct App {
-    logs: Vec<Event>,
-    log_buf: String,
-    ws_client: WsClient,
+pub struct State<'a> {
+    pub author: &'a str,
+    pub machine: &'a str,
 }
 
-impl App {
+pub struct App<'a> {
+    pub logs: Vec<Event>,
+    pub log_buf: String,
+    pub ws_client: WsClient,
+    pub state: State<'a>,
+}
+
+impl App<'_> {
     pub fn new(ws_client: WsClient) -> Self {
         App {
             logs: Vec::new(),
             log_buf: String::new(),
             ws_client,
+            state: State {
+                author: "Anonymous",
+                machine: "Unknown"
+            }
+        }
+    }
+
+    pub fn get_logs(&mut self) {
+        self.ws_client.get_logs(&mut self.logs)
+    }
+
+    pub fn send_log(&mut self) -> Result<(), WebSocketError> {
+        let event = self.create_event_from_buf();
+        self.ws_client.send_log(event)?;
+        self.log_buf.clear();
+
+        Ok(())
+    }
+
+    pub fn create_event_from_buf(&mut self) -> Event {
+        bucface_utils::Event {
+            time: chrono::Utc::now().naive_utc(),
+            author: self.state.author.into(),
+            event: self.log_buf.clone().into(),
+            machine: self.state.machine.into(),
         }
     }
 }
 
-
-impl eframe::App for App {
+impl eframe::App for App<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             body(ui, self);
@@ -27,45 +60,3 @@ impl eframe::App for App {
     }
 }
 
-fn header(ui: &mut egui::Ui) {
-    ui.heading("BucFace Client v0.1");
-}
-
-fn log_entry(ui: &mut egui::Ui, buf: &mut String) {
-    ui.vertical(|ui| {
-        ui.label("Log");
-        ui.text_edit_multiline(buf);
-    });
-}
-
-fn log_panel(ui: &mut egui::Ui, app: &App) {
-    ui.vertical(|ui| {
-        // create vertical collumn of all logs from App::logs
-        for log in app.logs.iter() {
-            ui.label(&*log.event.clone());
-        }
-    });
-}
-
-fn body(ui: &mut egui::Ui, app: &mut App) {
-    ui.vertical(|ui| {
-        header(ui);
-        ui.horizontal(|ui| {
-            log_entry(ui, &mut app.log_buf);
-            log_panel(ui, app);
-        })
-    });
-}
-
-fn create_log(
-    log: &str,
-    author: &str,
-    machine: &str,
-) -> Event {
-    bucface_utils::Event {
-        time: chrono::Utc::now().naive_utc(),
-        author: author.into(),
-        event: log.into(),
-        machine: machine.into(),
-    }
-}

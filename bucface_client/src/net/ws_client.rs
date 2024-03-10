@@ -1,12 +1,10 @@
-use bucface_utils::ws::{WsStream, WsWriter};
+use bucface_utils::ws::WsStream;
 use bucface_utils::Event;
-use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite;
 
-use super::ws_receiver::handle_connection;
-use super::ws_sender::send_log;
+use super::ws_receiver::start_receiver;
+use super::ws_sender::start_sender;
 
 #[derive(Debug)]
 pub enum ConnectionError {
@@ -25,7 +23,7 @@ pub enum WebSocketError {
 #[derive(Debug)]
 pub struct WsClient {
     pub receiver: Receiver,
-    pub write: WsWriter,
+    pub sender: Sender,
 }
 
 #[derive(Debug)]
@@ -34,18 +32,29 @@ pub struct Receiver {
     pub rx: tokio::sync::mpsc::Receiver<Event>,
 }
 
+#[derive(Debug)]
+pub struct Sender {
+    pub sender: tokio::task::JoinHandle<()>,
+    pub tx: tokio::sync::mpsc::Sender<Event>,
+}
+
 impl WsClient {
     pub async fn new(dest: &str) -> Result<WsClient, WebSocketError> {
         let stream = connect(dest).await?;
 
-        let (write, mut read) = stream.split();
+        let (mut write, mut read) = stream.split();
 
         let (receiver_tx, receiver_rx) = tokio::sync::mpsc::channel::<Event>(128);
         let receiver = tokio::spawn(async move {
-            match handle_connection(&mut read, &receiver_tx).await {
+            match start_receiver(&mut read, &receiver_tx).await {
                 Ok(_) => log::info!("WebSocket connection closed"),
                 Err(e) => log::error!("Error handling WebSocket connection: {:?}", e),
             }
+        });
+
+        let (sender_tx, mut sender_rx) = tokio::sync::mpsc::channel::<Event>(128);
+        let sender = tokio::spawn(async move {
+            start_sender(&mut write, &mut sender_rx).await;
         });
 
         Ok(WsClient {
@@ -53,19 +62,22 @@ impl WsClient {
                 receiver,
                 rx: receiver_rx,
             },
-            write,
+            sender: Sender {
+                sender,
+                tx: sender_tx,
+            },
         })
     }
 
-    pub async fn send_log(&mut self, log: Event) -> Result<(), WebSocketError> {
-        send_log(log, &mut self.write).await.map_err(|e| {
+    pub fn send_log(&mut self, log: Event) -> Result<(), WebSocketError> {
+        self.sender.tx.try_send(log).map_err(|e| {
             log::error!("Error sending log: {:?}", e);
-            WebSocketError::SoftError(format!("Error sending log: {:?}", e))
+            WebSocketError::SoftError("Error sending log".into())
         })
     }
 
-    pub async fn get_logs(&mut self, buf: &mut Vec<Event>) {
-        while let Some(log) = self.receiver.rx.recv().await {
+    pub fn get_logs(&mut self, buf: &mut Vec<Event>) {
+        while let Ok(log) = self.receiver.rx.try_recv() {
             buf.push(log);
         }
     }

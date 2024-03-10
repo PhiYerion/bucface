@@ -7,15 +7,12 @@ use rmp_serde::decode;
 use tokio::sync::mpsc::{self, Sender};
 use tokio_tungstenite::tungstenite::Message;
 
-pub async fn handle_connection(
-    read: &mut WsReader,
-    tx: &Sender<Event>,
-) -> Result<(), io::Error> {
+pub async fn start_receiver(read: &mut WsReader, tx: &Sender<Event>) -> Result<(), io::Error> {
     while let Some(res) = read.next().await {
         match res {
             Ok(Message::Binary(data)) => {
                 log::debug!("Received binary");
-                if let Err(e) = receive_event(tx.clone(), data) {
+                if let Err(e) = receive_event(tx.clone(), data).await {
                     log::error!("Error receiving event: {e:?}");
                 }
             }
@@ -37,9 +34,10 @@ enum ReceiveEventError {
     SendError(mpsc::error::SendError<Event>),
 }
 
-fn receive_event(tx: Sender<Event>, data: Vec<u8>) -> Result<(), ReceiveEventError> {
+async fn receive_event(tx: Sender<Event>, data: Vec<u8>) -> Result<(), ReceiveEventError> {
     let events = rmp_serde::from_slice::<Event>(&data).map_err(ReceiveEventError::DecodeError)?;
-    tx.blocking_send(events)
+    tx.send(events)
+        .await
         .map_err(ReceiveEventError::SendError)?;
 
     Ok(())

@@ -1,8 +1,8 @@
 pub mod ws;
-
 use rand::distributions::{Alphanumeric, Distribution, Standard};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Event {

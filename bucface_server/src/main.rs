@@ -1,6 +1,5 @@
-mod events;
-mod websocket;
 mod app;
+mod websocket;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
