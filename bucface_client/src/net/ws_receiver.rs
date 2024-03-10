@@ -1,16 +1,15 @@
 use std::io;
 
-use bucface_utils::Events;
-use futures_util::stream::SplitStream;
+use bucface_utils::ws::WsReader;
+use bucface_utils::Event;
 use futures_util::StreamExt;
-use tokio::net::TcpStream;
-use tokio::sync::mpsc::Sender;
+use rmp_serde::decode;
+use tokio::sync::mpsc::{self, Sender};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 pub async fn handle_connection(
-    read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    tx: &Sender<Events>,
+    read: &mut WsReader,
+    tx: &Sender<Event>,
 ) -> Result<(), io::Error> {
     while let Some(res) = read.next().await {
         match res {
@@ -34,11 +33,12 @@ pub async fn handle_connection(
 
 #[derive(Debug)]
 enum ReceiveEventError {
-    DecodeError(rmp_serde::decode::Error),
-    SendError(tokio::sync::mpsc::error::SendError<Events>),
+    DecodeError(decode::Error),
+    SendError(mpsc::error::SendError<Event>),
 }
-fn receive_event(tx: Sender<Events>, data: Vec<u8>) -> Result<(), ReceiveEventError> {
-    let events = rmp_serde::from_slice::<Events>(&data).map_err(ReceiveEventError::DecodeError)?;
+
+fn receive_event(tx: Sender<Event>, data: Vec<u8>) -> Result<(), ReceiveEventError> {
+    let events = rmp_serde::from_slice::<Event>(&data).map_err(ReceiveEventError::DecodeError)?;
     tx.blocking_send(events)
         .map_err(ReceiveEventError::SendError)?;
 

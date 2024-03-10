@@ -1,13 +1,12 @@
+use crate::net::ws_client;
+
 mod app;
 mod net;
-use app::App;
-
-use crate::net::ws_client::{self, verify_conn};
 
 #[tokio::main]
 async fn main() -> Result<(), eframe::Error> {
     env_logger::init();
-    let mut ws_client = ws_client::start("ws://127.0.0.1:8080").await;
+    let mut ws_client = ws_client::start("ws://127.0.0.1:8080").await.unwrap();
     log::trace!("Connected to {}", "127.0.0.1:8080");
 
     while let Some(msg) = ws_client.receiver.rx.recv().await {
