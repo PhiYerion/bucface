@@ -1,13 +1,16 @@
 use std::io;
 
-use bucface_utils::ws::WsReader;
-use bucface_utils::Event;
+use bucface_utils::ws::WsFaucet;
+use bucface_utils::EventDBResponse;
 use futures_util::StreamExt;
 use rmp_serde::decode;
 use tokio::sync::mpsc::{self, Sender};
 use tokio_tungstenite::tungstenite::Message;
 
-pub async fn start_receiver(read: &mut WsReader, tx: &Sender<Event>) -> Result<(), io::Error> {
+pub async fn start_receiver(
+    read: &mut WsFaucet,
+    tx: &Sender<EventDBResponse>,
+) -> Result<(), io::Error> {
     while let Some(res) = read.next().await {
         match res {
             Ok(Message::Binary(data)) => {
@@ -16,8 +19,8 @@ pub async fn start_receiver(read: &mut WsReader, tx: &Sender<Event>) -> Result<(
                     log::error!("Error receiving event: {e:?}");
                 }
             }
-            Ok(_) => {
-                log::debug!("Received non-binary message");
+            Ok(t) => {
+                log::debug!("Received non-binary message: {t}");
             }
             Err(e) => {
                 log::error!("Error receiving message: {e:?}");
@@ -31,11 +34,16 @@ pub async fn start_receiver(read: &mut WsReader, tx: &Sender<Event>) -> Result<(
 #[derive(Debug)]
 enum ReceiveEventError {
     DecodeError(decode::Error),
-    SendError(mpsc::error::SendError<Event>),
+    SendError(mpsc::error::SendError<EventDBResponse>),
 }
 
-async fn receive_event(tx: Sender<Event>, data: Vec<u8>) -> Result<(), ReceiveEventError> {
-    let events = rmp_serde::from_slice::<Event>(&data).map_err(ReceiveEventError::DecodeError)?;
+async fn receive_event(
+    tx: Sender<EventDBResponse>,
+    data: Vec<u8>,
+) -> Result<(), ReceiveEventError> {
+    let events =
+        rmp_serde::from_slice::<EventDBResponse>(&data).map_err(ReceiveEventError::DecodeError)?;
+
     tx.send(events)
         .await
         .map_err(ReceiveEventError::SendError)?;

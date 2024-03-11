@@ -6,5 +6,5 @@ use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
 
 pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
-pub type WsReader = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-pub type WsWriter = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+pub type WsFaucet = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
+pub type WsSink = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;

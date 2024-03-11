@@ -1,5 +1,5 @@
 use bucface_utils::ws::WsStream;
-use bucface_utils::Event;
+use bucface_utils::{Event, EventDBResponse};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite;
 
@@ -28,13 +28,17 @@ pub struct WsClient {
 
 #[derive(Debug)]
 pub struct Receiver {
+    /// The thread that is taking and handling the responses from the server
     pub receiver: tokio::task::JoinHandle<()>,
-    pub rx: tokio::sync::mpsc::Receiver<Event>,
+    /// A channel to read from to get the responses from the server
+    pub rx: tokio::sync::mpsc::Receiver<EventDBResponse>,
 }
 
 #[derive(Debug)]
 pub struct Sender {
+    /// The thread that is sending the logs to the server
     pub sender: tokio::task::JoinHandle<()>,
+    /// The channel to send events to, which are then sent to the server
     pub tx: tokio::sync::mpsc::Sender<Event>,
 }
 
@@ -44,7 +48,7 @@ impl WsClient {
 
         let (mut write, mut read) = stream.split();
 
-        let (receiver_tx, receiver_rx) = tokio::sync::mpsc::channel::<Event>(128);
+        let (receiver_tx, receiver_rx) = tokio::sync::mpsc::channel::<EventDBResponse>(128);
         let receiver = tokio::spawn(async move {
             match start_receiver(&mut read, &receiver_tx).await {
                 Ok(_) => log::info!("WebSocket connection closed"),
@@ -76,8 +80,18 @@ impl WsClient {
         })
     }
 
-    pub fn get_logs(&mut self, buf: &mut Vec<Event>) {
+    pub fn get_buf_logs(&mut self, buf: &mut Vec<EventDBResponse>) -> usize {
+        let mut count = 0;
         while let Ok(log) = self.receiver.rx.try_recv() {
+            buf.push(log);
+            count += 1;
+        }
+
+        count
+    }
+
+    pub async fn refresh_logs(&mut self, buf: &mut Vec<EventDBResponse>) {
+        while let Some(log) = self.receiver.rx.recv().await {
             buf.push(log);
         }
     }

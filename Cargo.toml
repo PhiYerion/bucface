@@ -9,7 +9,8 @@ debug = true
 [profile.release]
 opt-level = 'z'
 debug = false
-strip = 'all'
+strip = true
 lto = true
 codegen-units = 1
+panic = 'abort'
 

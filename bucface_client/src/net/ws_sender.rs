@@ -1,4 +1,4 @@
-use bucface_utils::ws::WsWriter;
+use bucface_utils::ws::WsSink;
 use bucface_utils::Event;
 use futures_util::SinkExt;
 use serde::Serialize;
@@ -11,8 +11,15 @@ pub enum SendLogError {
     SendError(tungstenite::Error),
 }
 
-pub async fn start_sender(writer: &mut WsWriter, rx: &mut Receiver<Event>) {
-    while let Some(log) = rx.recv().await {
+/// Start the sender thread, which sends logs to the server
+///
+/// # Arguments
+/// * `writer` - A [websocket](tokio_tungstenite::WebSocketStream) [writer](futures_util::stream::SplitSink)
+/// connected to the server
+/// * `sender_sink` - A [channel](Receiver) for the thread to receive [Event]s to send to the
+/// [server](bucface_server)
+pub async fn start_sender(writer: &mut WsSink, sender_sink: &mut Receiver<Event>) {
+    while let Some(log) = sender_sink.recv().await {
         let counter = 0;
         log::trace!("Sending log: {log:?}");
         while let Err(e) = send_log(log.clone(), writer).await {
@@ -26,7 +33,7 @@ pub async fn start_sender(writer: &mut WsWriter, rx: &mut Receiver<Event>) {
     }
 }
 
-pub async fn send_log(log: Event, writer: &mut WsWriter) -> Result<(), SendLogError> {
+pub async fn send_log(log: Event, writer: &mut WsSink) -> Result<(), SendLogError> {
     log::debug!("Sending log: {log:?}");
     let mut buf = Vec::new();
     let mut serializer = rmp_serde::Serializer::new(&mut buf);

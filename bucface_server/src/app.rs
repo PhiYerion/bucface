@@ -1,52 +1,22 @@
-use bucface_utils::Event;
-use rmp_serde::Serializer;
-use serde::{Deserialize, Serialize};
-use surrealdb::engine::local::Mem;
-use surrealdb::sql::Thing;
+use bucface_utils::{Event, EventDB, EventDBError};
 use surrealdb::Surreal;
 
-enum EventDBError {
-    Db(surrealdb::Error),
-    NotFound,
-    Rmp,
-}
+use crate::db::insert_event;
 
-#[derive(Debug, Deserialize)]
-struct Record {
-    #[allow(dead_code)]
-    id: Thing,
-}
-
-const EVENTS_TABLE: &str = "events";
-
-async fn insert_event<T: surrealdb::Connection>(
-    event: Event,
+pub async fn handle_new_event<T: surrealdb::Connection>(
+    buf: &[u8],
     db: Surreal<T>,
-) -> Result<(), EventDBError> {
-    let _ = db
-        .create::<Vec<Event>>(EVENTS_TABLE)
-        .content(event)
-        .await
-        .map_err(EventDBError::Db);
+    id_count: i64,
+) -> Result<Event, EventDBError> {
+    let event: Event = rmp_serde::decode::from_slice(buf).map_err(|_| EventDBError::Rmp)?;
+    let server_event = EventDB::from(event.clone(), id_count);
 
-    Ok(())
-}
-
-async fn get_events<T: surrealdb::Connection>(
-    timestamp: i64,
-    db: Surreal<T>,
-) -> Result<Vec<Event>, EventDBError> {
-    let mut response = db
-        .query("SELECT * FROM type::table($table) WHERE time > $timestamp")
-        .bind(("table", EVENTS_TABLE))
-        .bind(("timestamp", timestamp))
-        .await
-        .map_err(EventDBError::Db)?;
-
-    let events: Vec<Event> = response.take(0).map_err(EventDBError::Db)?;
-    if events.is_empty() {
-        return Err(EventDBError::NotFound);
+    match insert_event(server_event.clone(), db).await {
+        Ok(res) => {
+            assert_eq!(res.len(), 1);
+            assert_eq!(res[0], server_event);
+            Ok(event)
+        }
+        Err(e) => Err(e),
     }
-
-    Ok(events)
 }

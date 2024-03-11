@@ -1,6 +1,4 @@
-use bucface_utils::Event;
-use futures_util::TryFutureExt;
-use tokio::task::JoinHandle;
+use bucface_utils::{Event, EventDBResponse};
 
 use crate::net::ws_client::{WebSocketError, WsClient};
 use crate::ui::main_window::body;
@@ -11,7 +9,7 @@ pub struct State<'a> {
 }
 
 pub struct App<'a> {
-    pub logs: Vec<Event>,
+    pub logs: Vec<EventDBResponse>,
     pub log_buf: String,
     pub ws_client: WsClient,
     pub state: State<'a>,
@@ -25,13 +23,15 @@ impl App<'_> {
             ws_client,
             state: State {
                 author: "Anonymous",
-                machine: "Unknown"
-            }
+                machine: "Unknown",
+            },
         }
     }
 
     pub fn get_logs(&mut self) {
-        self.ws_client.get_logs(&mut self.logs)
+        log::debug!("Getting logs");
+        let count = self.ws_client.get_buf_logs(&mut self.logs);
+        log::info!("Got {count} new logs");
     }
 
     pub fn send_log(&mut self) -> Result<(), WebSocketError> {
@@ -46,7 +46,7 @@ impl App<'_> {
         bucface_utils::Event {
             time: chrono::Utc::now().naive_utc(),
             author: self.state.author.into(),
-            event: self.log_buf.clone().into(),
+            event: self.log_buf.clone(),
             machine: self.state.machine.into(),
         }
     }
@@ -57,6 +57,6 @@ impl eframe::App for App<'_> {
         egui::CentralPanel::default().show(ctx, |ui| {
             body(ui, self);
         });
+        self.get_logs();
     }
 }
-

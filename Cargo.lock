@@ -817,6 +817,7 @@ dependencies = [
 name = "bucface_client"
 version = "0.1.0"
 dependencies = [
+ "bucface_server",
  "bucface_utils",
  "chrono",
  "eframe",
@@ -859,6 +860,7 @@ dependencies = [
  "rand",
  "rmp-serde",
  "serde",
+ "surrealdb",
  "tokio",
  "tokio-tungstenite 0.21.0",
 ]

@@ -7,6 +7,8 @@ use self::net::ws_client::WsClient;
 
 #[tokio::main]
 async fn main() -> Result<(), eframe::Error> {
+    env_logger::init();
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default(),
         ..Default::default()
