@@ -3,8 +3,11 @@ use surrealdb::Surreal;
 
 pub const EVENTS_TABLE: &str = "events";
 
+/// Inserts an [EventDB](EventDB) into the [database](Surreal), returning the
+/// [database](Surreal) response, which contains the [Vec] of [EventDB] that
+/// was inserted.
 pub async fn insert_event<T: surrealdb::Connection>(
-    event: EventDB,
+    event: &EventDB,
     db: Surreal<T>,
 ) -> Result<Vec<EventDB>, EventDBError> {
     log::debug!("Inserting event: {event:?}");
@@ -20,6 +23,8 @@ pub async fn insert_event<T: surrealdb::Connection>(
         .map_err(EventDBError::Db)
 }
 
+/// Initializes the [database](Surreal) by setting the namespace to "Bucface"
+/// and the database to "Events".
 pub async fn start_db<T: surrealdb::Connection>(
     db: &mut Surreal<T>,
 ) -> Result<(), surrealdb::Error> {
@@ -27,6 +32,7 @@ pub async fn start_db<T: surrealdb::Connection>(
     db.use_db("Events").await
 }
 
+/// Gets all [EventDB]s since and including the given timestamp.
 pub async fn get_events<T: surrealdb::Connection>(
     timestamp: i64,
     db: Surreal<T>,
@@ -49,7 +55,7 @@ pub async fn get_events<T: surrealdb::Connection>(
 }
 
 #[cfg(test)]
-mod test {
+mod db_tests {
     use rand::Rng;
 
     use super::*;
@@ -76,9 +82,41 @@ mod test {
         let mut rng = rand::thread_rng();
 
         for i in 0..100 {
-            insert_event(EventDB::from(rng.gen(), i), db.clone())
+            insert_event(&EventDB::from(rng.gen(), i), db.clone())
                 .await
                 .expect("Failed to insert event");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_events() {
+        env_logger::try_init();
+
+        let mut db = Surreal::new::<surrealdb::engine::local::Mem>(())
+            .await
+            .expect("Failed to start db");
+        start_db(&mut db).await.expect("Failed to initialize db");
+
+        let mut rng = rand::thread_rng();
+
+        let events = (0..100)
+            .map(|i| EventDB::from(rng.gen(), i))
+            .collect::<Vec<EventDB>>();
+
+        for event in &events {
+            insert_event(event, db.clone())
+                .await
+                .expect("Failed to insert event");
+        }
+
+        let mut new_events = get_events(0, db.clone())
+            .await
+            .expect("Failed to get events");
+
+        new_events.sort_by(|a, b| a._id.cmp(&b._id));
+
+        for (event, new_event) in events.iter().zip(new_events.iter()) {
+            assert_eq!(event, new_event);
         }
     }
 }

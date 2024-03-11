@@ -2,10 +2,9 @@ use bucface_utils::EventDBResponse;
 use futures::{SinkExt, StreamExt};
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
-use surrealdb::engine::local::Mem;
-use surrealdb::{Connection, Surreal};
+use surrealdb::Surreal;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 
