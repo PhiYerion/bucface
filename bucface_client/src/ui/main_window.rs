@@ -1,107 +1,82 @@
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::Text;
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-use ratatui::Frame;
+use bucface_utils::{Event, EventDBErrorSerde};
+use egui::{Align, Layout, Rgba};
 
-use crate::app::{App, AppMode};
+use crate::app::App;
 
-use super::entry_block::entry;
-use super::log_block::log_popup;
-
-pub fn main_window<'a>(frame: &mut Frame<'a>, app: &App<'a>) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(1),
-            Constraint::Length(3),
-        ])
-        .split(frame.size());
-
-    let half_chunks = || Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(chunks[1]);
-
-    create_title(chunks[0], frame, app);
-
-
-    match app.mode {
-        AppMode::Normal => create_events(chunks[1], frame, app),
-        AppMode::Entry => {
-            let half_chunks = half_chunks();
-            create_events(half_chunks[0], frame, app);
-            entry(half_chunks[1], frame, app);
-        }
-        AppMode::Logging => {
-            let half_chunks = half_chunks();
-            create_events(half_chunks[0], frame, app);
-            log_popup(half_chunks[1], frame, app);
-        }
-        AppMode::Quitting => {}
-    }
-
-    create_nav(chunks[2], frame, app);
-}
-
-fn create_title(chunk: Rect, frame: &mut Frame, app: &App) {
-    let title_block = Block::default()
-        .borders(Borders::BOTTOM)
-        .style(Style::default());
-
-    let title = Paragraph::new(Text::styled(
-        format!("{}@BucFace v0.1", app.name),
-        Style::default().fg(Color::Green),
-    ))
-    .block(title_block);
-
-    frame.render_widget(title, chunk);
-}
-
-fn create_events<'a>(chunk: Rect, frame: &mut Frame<'a>, app: &App<'a>) {
-    let list_items = app.events.iter().map(|event| {
-        let text = Text::styled(
-            format!(
-                "{:?} | {}@{}: {}",
-                event.time, event.author, event.machine, event.event
-            ),
-            Style::default().fg(Color::LightGreen),
-        );
-        ListItem::new(text)
+pub fn body(ui: &mut egui::Ui, app: &mut App) {
+    ui.vertical(|ui| {
+        header(ui);
+        ui.horizontal(|ui| {
+            log_entry(ui, app);
+            log_panel(ui, app);
+        })
     });
-
-    let list = List::new(list_items);
-    frame.render_widget(list, chunk);
 }
 
-fn create_nav(chunk: Rect, frame: &mut Frame, app: &App) {
-    let mode_text = Text::styled(
-        app.mode.to_string(),
-        Style::default().fg(match app.mode {
-            AppMode::Entry => Color::Green,
-            AppMode::Normal => Color::LightGreen,
-            AppMode::Logging => Color::Yellow,
-            AppMode::Quitting => Color::Red,
-        }),
-    );
-    let mode_block = Paragraph::new(mode_text)
-        .block(Block::default().borders(Borders::TOP))
-        .alignment(ratatui::layout::Alignment::Center);
+fn header(ui: &mut egui::Ui) {
+    ui.heading("BucFace Client v0.1");
+}
 
-    let help_text = Text::styled(
-        "Press 'q' to quit, 'e' to start editing, 's' to send, 'c' to clear".to_string(),
-        Style::default().fg(Color::LightGreen),
-    );
-    let help_block = Paragraph::new(help_text)
-        .block(Block::default().borders(Borders::TOP))
-        .alignment(ratatui::layout::Alignment::Center);
+fn log_entry(ui: &mut egui::Ui, app: &mut App) {
+    ui.vertical(|ui| {
+        ui.label("Log");
+        ui.text_edit_multiline(&mut app.log_buf);
+        if ui.button("Send Log").clicked() {
+            let _ = app.send_log();
+        }
+    });
+}
 
-    let footer_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(chunk);
+fn log_panel(ui: &mut egui::Ui, app: &mut App) {
+    ui.vertical(|ui| {
+        // create vertical collumn of all logs from App::logs
+        ui.label("Logs");
+        if ui.button("Refresh").clicked() {
+            app.get_logs();
+        }
 
-    frame.render_widget(mode_block, footer_chunks[0]);
-    frame.render_widget(help_block, footer_chunks[1]);
+        let print_event = |ui: &mut egui::Ui, event: &Event| {
+            ui.vertical(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(Rgba::from_rgb(0.0, 1.0, 0.5), &event.author);
+                    ui.colored_label(Rgba::from_rgb(0.1, 0.1, 0.1), "@");
+                    ui.colored_label(Rgba::from_rgb(0.5, 1.0, 0.5), &event.machine);
+                });
+                ui.colored_label(Rgba::from_rgb(0.1, 0.7, 0.9), &event.event);
+            });
+        };
+
+        let print_error = |ui: &mut egui::Ui, error: &EventDBErrorSerde| {
+            ui.colored_label(Rgba::from_rgb(1., 0., 0.), format!("Error: {:?}", error));
+        };
+
+        for log in &app.logs {
+            let text = |ui: &mut egui::Ui| match &log.inner {
+                Ok(event) => print_event(ui, event),
+                Err(e) => print_error(ui, e),
+            };
+
+            let time = |ui: &mut egui::Ui| {
+                match &log.inner {
+                    Ok(event) => {
+                        ui.colored_label(Rgba::from_rgb(0.5, 0.7, 0.9), event.time.to_string());
+                    }
+                    Err(_) => {}
+                };
+            };
+
+            ui.horizontal_wrapped(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                    time(ui);
+                    ui.with_layout(
+                        Layout::left_to_right(Align::Min).with_main_wrap(true),
+                        |ui| {
+                            text(ui);
+                        },
+                    );
+                });
+            });
+            ui.separator();
+        }
+    });
 }

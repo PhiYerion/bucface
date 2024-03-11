@@ -1,27 +1,45 @@
-#[cfg(feature = "actix")]
-use actix_web::body::BoxBody;
-#[cfg(feature = "actix")]
-use actix_web::{HttpRequest, HttpResponse, Responder};
+pub mod ws;
 use rand::distributions::{Alphanumeric, Distribution, Standard};
 use rand::Rng;
-use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Event {
-    pub author: Box<str>,
-    pub machine: Box<str>,
-    pub event: Box<str>,
+    pub author: String,
+    pub machine: String,
+    pub event: String,
     pub time: chrono::NaiveDateTime,
+}
+
+impl Default for Event {
+    fn default() -> Self {
+        Self {
+            author: "Default Author".into(),
+            machine: "Default Machine".into(),
+            event: "Default Event".into(),
+            time: chrono::Utc::now().naive_utc(),
+        }
+    }
 }
 
 impl Distribution<Event> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Event {
         Event {
-            author: random_string(rng.gen_range(3..100)).into(),
-            machine: random_string(rng.gen_range(3..100)).into(),
-            event: random_string(rng.gen_range(3..10000)).into(),
+            author: random_string(rng.gen_range(3..100)),
+            machine: random_string(rng.gen_range(3..100)),
+            event: random_string(rng.gen_range(3..10000)),
             time: chrono::Utc::now().naive_utc(),
+        }
+    }
+}
+
+impl From<EventDB> for Event {
+    fn from(event: EventDB) -> Self {
+        Self {
+            author: event.author,
+            machine: event.machine,
+            event: event.event,
+            time: event.time,
         }
     }
 }
@@ -34,27 +52,56 @@ fn random_string(len: usize) -> String {
         .collect::<String>()
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct Events {
-    pub inner: Vec<Event>,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EventDB {
+    pub _id: i64,
+    pub author: String,
+    pub machine: String,
+    pub event: String,
+    pub time: chrono::NaiveDateTime,
 }
 
-impl Distribution<Events> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Events {
-        Events {
-            inner: (0..rng.gen_range(1..100)).map(|_| rng.gen()).collect(),
+impl EventDB {
+    pub fn from(event: Event, id: i64) -> Self {
+        Self {
+            _id: id,
+            author: event.author,
+            machine: event.machine,
+            event: event.event,
+            time: event.time,
         }
     }
 }
 
-#[cfg(feature = "actix")]
-impl Responder for Events {
-    fn respond_to(self, _: &HttpRequest) -> HttpResponse {
-        let mut buf = Vec::new();
-        if let Err(e) = self.serialize(&mut Serializer::new(&mut buf)) {
-            return HttpResponse::InternalServerError().body(e.to_string());
+#[derive(Debug)]
+pub enum EventDBError {
+    Db(surrealdb::Error),
+    NotFound,
+    Rmp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EventDBResponse {
+    pub id: i64,
+    pub inner: Result<Event, EventDBErrorSerde>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum EventDBErrorSerde {
+    Db(String),
+    NotFound,
+    Rmp,
+}
+
+impl EventDBResponse {
+    pub fn from_err(id: i64, e: EventDBError) -> Self {
+        Self {
+            id,
+            inner: Err(match e {
+                EventDBError::Db(e) => EventDBErrorSerde::Db(e.to_string()),
+                EventDBError::NotFound => EventDBErrorSerde::NotFound,
+                EventDBError::Rmp => EventDBErrorSerde::Rmp,
+            }),
         }
-        HttpResponse::Ok().body(buf)
     }
-    type Body = BoxBody;
 }
