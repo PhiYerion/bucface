@@ -62,7 +62,7 @@ mod db_tests {
 
     #[tokio::test]
     async fn test_start_db() {
-        env_logger::try_init();
+        let _ = env_logger::try_init();
 
         let mut db = Surreal::new::<surrealdb::engine::local::Mem>(())
             .await
@@ -72,7 +72,7 @@ mod db_tests {
 
     #[tokio::test]
     async fn test_insert_event() {
-        env_logger::try_init();
+        let _ = env_logger::try_init();
 
         let mut db = Surreal::new::<surrealdb::engine::local::Mem>(())
             .await
@@ -90,7 +90,7 @@ mod db_tests {
 
     #[tokio::test]
     async fn test_get_events() {
-        env_logger::try_init();
+        let _ = env_logger::try_init();
 
         let mut db = Surreal::new::<surrealdb::engine::local::Mem>(())
             .await

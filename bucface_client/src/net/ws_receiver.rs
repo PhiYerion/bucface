@@ -33,8 +33,8 @@ pub async fn start_receiver(
 
 #[derive(Debug)]
 enum ReceiveEventError {
-    DecodeError(decode::Error),
-    SendError(mpsc::error::SendError<EventDBResponse>),
+    Decode(decode::Error),
+    Send(mpsc::error::SendError<EventDBResponse>),
 }
 
 async fn receive_event(
@@ -42,11 +42,9 @@ async fn receive_event(
     data: Vec<u8>,
 ) -> Result<(), ReceiveEventError> {
     let events =
-        rmp_serde::from_slice::<EventDBResponse>(&data).map_err(ReceiveEventError::DecodeError)?;
+        rmp_serde::from_slice::<EventDBResponse>(&data).map_err(ReceiveEventError::Decode)?;
 
-    tx.send(events)
-        .await
-        .map_err(ReceiveEventError::SendError)?;
+    tx.send(events).await.map_err(ReceiveEventError::Send)?;
 
     Ok(())
 }

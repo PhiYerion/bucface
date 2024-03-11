@@ -1,5 +1,5 @@
-use bucface_utils::{Event, EventDBError, EventDBErrorSerde};
-use egui::{Align, Layout, Rgba, RichText, TextStyle};
+use bucface_utils::{Event, EventDBErrorSerde};
+use egui::{Align, Layout, Rgba};
 
 use crate::app::App;
 

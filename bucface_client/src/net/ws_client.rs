@@ -15,9 +15,9 @@ pub enum ConnectionError {
 
 #[derive(Debug)]
 pub enum WebSocketError {
-    ConnectionError(ConnectionError),
-    SoftError(String),
-    HardError(String),
+    Connection(ConnectionError),
+    Soft(String),
+    Hard(String),
 }
 
 #[derive(Debug)]
@@ -76,7 +76,7 @@ impl WsClient {
     pub fn send_log(&mut self, log: Event) -> Result<(), WebSocketError> {
         self.sender.tx.try_send(log).map_err(|e| {
             log::error!("Error sending log: {:?}", e);
-            WebSocketError::SoftError("Error sending log".into())
+            WebSocketError::Soft("Error sending log".into())
         })
     }
 
@@ -132,12 +132,12 @@ async fn connect(dest: &str) -> Result<WsStream, WebSocketError> {
     log::info!("Connecting to {}", dest);
     let (mut stream, _) = tokio_tungstenite::connect_async(dest).await.map_err(|e| {
         log::error!("Error connecting to {}: {:?}", dest, e);
-        WebSocketError::HardError(format!("Error connecting to {}: {:?}", dest, e))
+        WebSocketError::Hard(format!("Error connecting to {}: {:?}", dest, e))
     })?;
 
     verify_conn(&mut stream).await.map_err(|e| {
         log::error!("Error verifying connection: {:?}", e);
-        WebSocketError::ConnectionError(e)
+        WebSocketError::Connection(e)
     })?;
     log::trace!("Connected to {}", dest);
 
