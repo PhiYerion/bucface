@@ -3,7 +3,7 @@ use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicI64;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use surrealdb::Surreal;
 use tokio::net::{TcpListener, TcpStream};
@@ -17,7 +17,7 @@ pub async fn handle_connection<T: surrealdb::Connection>(
     stream: TcpStream,
     socket: SocketAddr,
     db: Surreal<T>,
-    id_counter: Arc<AtomicI64>,
+    id_counter: Arc<AtomicU64>,
 ) -> Result<(), io::Error> {
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
@@ -61,7 +61,7 @@ pub async fn handle_connection<T: surrealdb::Connection>(
 async fn handle_binary_message<T: surrealdb::Connection>(
     message: &[u8],
     db: &Surreal<T>,
-    id_counter: Arc<AtomicI64>,
+    id_counter: Arc<AtomicU64>,
     write: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
 ) -> Result<(), EventDBError> {
     let result = handle_client_message(message, db, id_counter).await;
@@ -70,14 +70,16 @@ async fn handle_binary_message<T: surrealdb::Connection>(
             for db_event in db_events {
                 log::debug!("Inserted event: {db_event:?}");
                 let response = EventDBResponse::from(db_event);
-                let result_encoded = rmp_serde::encode::to_vec(&response).map_err(EventDBError::RmpEncode)?;
+                let result_encoded =
+                    rmp_serde::encode::to_vec(&response).map_err(EventDBError::RmpEncode)?;
                 write.send(Message::Binary(result_encoded)).await.unwrap();
             }
         }
         Err((e, id)) => {
             log::error!("Error inserting event: {e:?}");
             let response = EventDBResponse::from_err(id, e);
-            let result_encoded = rmp_serde::encode::to_vec(&response).map_err(EventDBError::RmpEncode)?;
+            let result_encoded =
+                rmp_serde::encode::to_vec(&response).map_err(EventDBError::RmpEncode)?;
             write.send(Message::Binary(result_encoded)).await.unwrap();
         }
     };
@@ -91,7 +93,7 @@ pub async fn start<T: surrealdb::Connection>(
 ) -> Result<(), io::Error> {
     let socket = TcpListener::bind(addr).await?;
     db::start_db(db).await.unwrap();
-    let id_counter = Arc::new(AtomicI64::new(0));
+    let id_counter = Arc::new(AtomicU64::new(0));
 
     while let Ok((stream, addr)) = socket.accept().await {
         tokio::spawn(handle_connection(

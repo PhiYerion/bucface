@@ -32,7 +32,8 @@ fn log_panel(ui: &mut egui::Ui, app: &mut App) {
         // create vertical collumn of all logs from App::logs
         ui.label("Logs");
         if ui.button("Refresh").clicked() {
-            app.get_logs();
+            app.logs.clear();
+            app.ws_client.get_logs_since(0);
         }
 
         let print_event = |ui: &mut egui::Ui, event: &Event| {

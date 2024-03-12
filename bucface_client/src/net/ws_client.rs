@@ -1,5 +1,5 @@
 use bucface_utils::ws::WsStream;
-use bucface_utils::{Event, EventDBResponse};
+use bucface_utils::{ClientMessage, Event, EventDBResponse};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite;
 
@@ -39,7 +39,7 @@ pub struct Sender {
     /// The thread that is sending the logs to the server
     pub sender: tokio::task::JoinHandle<()>,
     /// The channel to send events to, which are then sent to the server
-    pub tx: tokio::sync::mpsc::Sender<Event>,
+    pub tx: tokio::sync::mpsc::Sender<ClientMessage>,
 }
 
 impl WsClient {
@@ -56,7 +56,7 @@ impl WsClient {
             }
         });
 
-        let (sender_tx, mut sender_rx) = tokio::sync::mpsc::channel::<Event>(128);
+        let (sender_tx, mut sender_rx) = tokio::sync::mpsc::channel::<ClientMessage>(128);
         let sender = tokio::spawn(async move {
             start_sender(&mut write, &mut sender_rx).await;
         });
@@ -74,26 +74,40 @@ impl WsClient {
     }
 
     pub fn send_log(&mut self, log: Event) -> Result<(), WebSocketError> {
-        self.sender.tx.try_send(log).map_err(|e| {
+        let message = ClientMessage::NewEvent(log);
+        self.sender.tx.try_send(message).map_err(|e| {
             log::error!("Error sending log: {:?}", e);
             WebSocketError::Soft("Error sending log".into())
         })
     }
 
-    pub fn get_buf_logs(&mut self, buf: &mut Vec<EventDBResponse>) -> usize {
-        let mut count = 0;
-        while let Ok(log) = self.receiver.rx.try_recv() {
-            buf.push(log);
-            count += 1;
-        }
-
-        count
+    pub fn get_log(&mut self, id: u64) -> Result<(), WebSocketError> {
+        self.sender
+            .tx
+            .try_send(ClientMessage::GetEvent(id))
+            .map_err(|e| {
+                log::error!("Error getting log: {:?}", e);
+                WebSocketError::Soft("Error sending get log request".into())
+            })
     }
 
-    pub async fn refresh_logs(&mut self, buf: &mut Vec<EventDBResponse>) {
-        while let Some(log) = self.receiver.rx.recv().await {
+    pub fn get_buf_logs(&mut self, buf: &mut Vec<EventDBResponse>) -> Vec<u64> {
+        let mut new_log_ids: Vec<u64> = Vec::new();
+        while let Ok(log) = self.receiver.rx.try_recv() {
+            new_log_ids.push(log.id);
             buf.push(log);
         }
+
+        new_log_ids
+    }
+
+    /// Gets all logs including and after the given id
+    pub fn get_logs_since(&mut self, since_id: u64) -> Result<(), WebSocketError> {
+        let message = ClientMessage::GetSince(since_id);
+        self.sender.tx.try_send(message).map_err(|e| {
+            log::error!("Error sending get logs since request: {:?}", e);
+            WebSocketError::Soft("Error sending get logs since request".into())
+        })
     }
 }
 

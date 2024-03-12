@@ -13,6 +13,7 @@ pub struct App<'a> {
     pub log_buf: String,
     pub ws_client: WsClient,
     pub state: State<'a>,
+    pub log_ids: Vec<u64>,
 }
 
 impl App<'_> {
@@ -25,13 +26,8 @@ impl App<'_> {
                 author: "Anonymous",
                 machine: "Unknown",
             },
+            log_ids: Vec::new(),
         }
-    }
-
-    pub fn get_logs(&mut self) {
-        log::debug!("Getting logs");
-        let count = self.ws_client.get_buf_logs(&mut self.logs);
-        log::info!("Got {count} new logs");
     }
 
     pub fn send_log(&mut self) -> Result<(), WebSocketError> {
@@ -40,6 +36,20 @@ impl App<'_> {
         self.log_buf.clear();
 
         Ok(())
+    }
+
+    // This function would be faster if this is either inserting is handled by
+    // ws_client.get_buf_logs or if a function is passed to ws_client that inserts
+    // the logs into the log_ids vector.
+    pub fn get_logs(&mut self) {
+        self.ws_client.get_buf_logs(&mut self.logs)
+            .drain(..)
+            .for_each(|id| {
+                match self.log_ids.binary_search(&id) {
+                    Ok(_) => log::warn!("Attempting to insert log {id}, but we already have it"),
+                    Err(i) => self.log_ids.insert(i, id),
+                }
+            });
     }
 
     pub fn create_event_from_buf(&mut self) -> Event {

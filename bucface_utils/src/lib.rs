@@ -3,7 +3,7 @@ use rand::distributions::{Alphanumeric, Distribution, Standard};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Event {
     pub author: String,
     pub machine: String,
@@ -43,14 +43,14 @@ impl From<EventDB> for Event {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Eq, Hash, PartialOrd, Ord)]
 pub enum ClientMessage {
     /// A message to add to the database.
     NewEvent(Event),
     /// A message that requests the event with the given id.
-    GetEvent(i64),
+    GetEvent(u64),
     /// A message that requests all events since the given id.
-    GetSince(i64),
+    GetSince(u64),
 }
 
 fn random_string(len: usize) -> String {
@@ -63,7 +63,7 @@ fn random_string(len: usize) -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EventDB {
-    pub _id: i64,
+    pub _id: u64,
     pub author: String,
     pub machine: String,
     pub event: String,
@@ -71,7 +71,7 @@ pub struct EventDB {
 }
 
 impl EventDB {
-    pub fn from(event: Event, id: i64) -> Self {
+    pub fn from(event: Event, id: u64) -> Self {
         Self {
             _id: id,
             author: event.author,
@@ -92,7 +92,7 @@ pub enum EventDBError {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EventDBResponse {
-    pub id: i64,
+    pub id: u64,
     pub inner: Result<Event, EventDBErrorSerde>,
 }
 
@@ -113,7 +113,7 @@ impl From<EventDB> for EventDBResponse {
 }
 
 impl EventDBResponse {
-    pub fn from_err(id: i64, e: EventDBError) -> Self {
+    pub fn from_err(id: u64, e: EventDBError) -> Self {
         Self {
             id,
             inner: Err(match e {

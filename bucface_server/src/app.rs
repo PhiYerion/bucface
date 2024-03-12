@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicI64;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use bucface_utils::{ClientMessage, EventDB, EventDBError};
@@ -36,8 +36,8 @@ use crate::db::{get_event, get_events_since, insert_event};
 pub async fn handle_client_message<T: surrealdb::Connection>(
     message: &[u8],
     db: &Surreal<T>,
-    id_count: Arc<AtomicI64>,
-) -> Result<Vec<EventDB>, (EventDBError, i64)> {
+    id_count: Arc<AtomicU64>,
+) -> Result<Vec<EventDB>, (EventDBError, u64)> {
     let id = id_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let message: ClientMessage =
         rmp_serde::decode::from_slice(message).map_err(|e| (EventDBError::RmpDecode(e), id))?;
@@ -76,7 +76,7 @@ mod app_tests {
 
         for _ in 0..100 {
             let mut db = Surreal::new::<Mem>(()).await.unwrap();
-            let id_counter = Arc::new(AtomicI64::new(0));
+            let id_counter = Arc::new(AtomicU64::new(0));
             start_db(&mut db).await.unwrap();
 
             let event: Event = rng.gen();
@@ -92,7 +92,7 @@ mod app_tests {
     async fn test_handle_get_since() {
         let mut rng = rand::thread_rng();
         let mut db = Surreal::new::<Mem>(()).await.unwrap();
-        let id_counter = Arc::new(AtomicI64::new(0));
+        let id_counter = Arc::new(AtomicU64::new(0));
         start_db(&mut db).await.unwrap();
 
         let send_message = |message: ClientMessage| {

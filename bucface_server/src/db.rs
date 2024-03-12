@@ -34,7 +34,7 @@ pub async fn start_db<T: surrealdb::Connection>(
 
 /// Gets all [EventDB]s since and including the given id.
 pub async fn get_events_since<T: surrealdb::Connection>(
-    id: i64,
+    id: u64,
     db: &Surreal<T>,
 ) -> Result<Vec<EventDB>, EventDBError> {
     log::debug!("Getting events after id: {id}");
@@ -55,7 +55,7 @@ pub async fn get_events_since<T: surrealdb::Connection>(
 }
 
 pub async fn get_event<T: surrealdb::Connection>(
-    id: i64,
+    id: u64,
     db: &Surreal<T>,
 ) -> Result<EventDB, EventDBError> {
     let mut query = db
