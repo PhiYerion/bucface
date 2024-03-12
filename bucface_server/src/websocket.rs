@@ -1,14 +1,16 @@
-use bucface_utils::EventDBResponse;
+use bucface_utils::{EventDBError, EventDBResponse};
+use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use surrealdb::Surreal;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::WebSocketStream;
 
-use crate::app::handle_new_event;
+use crate::app::handle_client_message;
 use crate::db;
 
 pub async fn handle_connection<T: surrealdb::Connection>(
@@ -42,25 +44,9 @@ pub async fn handle_connection<T: surrealdb::Connection>(
             }
             Message::Binary(inner_msg) => {
                 log::debug!("Received binary from {socket}: {inner_msg:?}",);
-                let id = id_counter.fetch_add(1, Ordering::Relaxed);
-                let result = handle_new_event(&inner_msg, db.clone(), id).await;
-                let response = match result {
-                    Ok(event) => {
-                        log::debug!("Inserted event: {event:?}");
-                        EventDBResponse {
-                            id,
-                            inner: Ok(event),
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Error inserting event: {e:?}");
-                        EventDBResponse::from_err(id, e)
-                    }
-                };
-
-                let result_encoded = rmp_serde::encode::to_vec(&response).unwrap();
-
-                write.send(Message::Binary(result_encoded)).await.unwrap();
+                handle_binary_message(&inner_msg, &db, id_counter.clone(), &mut write)
+                    .await
+                    .expect("Error handling binary message");
             }
             Message::Frame(inner_msg) => {
                 log::debug!("Received frame from {socket}: {inner_msg}",);
@@ -68,6 +54,33 @@ pub async fn handle_connection<T: surrealdb::Connection>(
             }
         }
     }
+
+    Ok(())
+}
+
+async fn handle_binary_message<T: surrealdb::Connection>(
+    message: &[u8],
+    db: &Surreal<T>,
+    id_counter: Arc<AtomicI64>,
+    write: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+) -> Result<(), EventDBError> {
+    let result = handle_client_message(message, db, id_counter).await;
+    match result {
+        Ok(db_events) => {
+            for db_event in db_events {
+                log::debug!("Inserted event: {db_event:?}");
+                let response = EventDBResponse::from(db_event);
+                let result_encoded = rmp_serde::encode::to_vec(&response).map_err(EventDBError::RmpEncode)?;
+                write.send(Message::Binary(result_encoded)).await.unwrap();
+            }
+        }
+        Err((e, id)) => {
+            log::error!("Error inserting event: {e:?}");
+            let response = EventDBResponse::from_err(id, e);
+            let result_encoded = rmp_serde::encode::to_vec(&response).map_err(EventDBError::RmpEncode)?;
+            write.send(Message::Binary(result_encoded)).await.unwrap();
+        }
+    };
 
     Ok(())
 }

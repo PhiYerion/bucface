@@ -8,7 +8,7 @@ pub const EVENTS_TABLE: &str = "events";
 /// was inserted.
 pub async fn insert_event<T: surrealdb::Connection>(
     event: &EventDB,
-    db: Surreal<T>,
+    db: &Surreal<T>,
 ) -> Result<Vec<EventDB>, EventDBError> {
     log::debug!("Inserting event: {event:?}");
 
@@ -32,17 +32,17 @@ pub async fn start_db<T: surrealdb::Connection>(
     db.use_db("Events").await
 }
 
-/// Gets all [EventDB]s since and including the given timestamp.
-pub async fn get_events<T: surrealdb::Connection>(
-    timestamp: i64,
-    db: Surreal<T>,
+/// Gets all [EventDB]s since and including the given id.
+pub async fn get_events_since<T: surrealdb::Connection>(
+    id: i64,
+    db: &Surreal<T>,
 ) -> Result<Vec<EventDB>, EventDBError> {
-    log::debug!("Getting events after timestamp: {timestamp}");
+    log::debug!("Getting events after id: {id}");
 
     let mut response = db
-        .query("SELECT * FROM type::table($table) WHERE time > type::number($timestamp)")
+        .query("SELECT * FROM type::table($table) WHERE _id >= type::number($id)")
         .bind(("table", EVENTS_TABLE))
-        .bind(("timestamp", timestamp))
+        .bind(("id", id))
         .await
         .map_err(EventDBError::Db)?;
 
@@ -52,6 +52,25 @@ pub async fn get_events<T: surrealdb::Connection>(
     }
 
     Ok(events)
+}
+
+pub async fn get_event<T: surrealdb::Connection>(
+    id: i64,
+    db: &Surreal<T>,
+) -> Result<EventDB, EventDBError> {
+    let mut query = db
+        .query("SELECT * FROM type::table($table) WHERE _id = $id")
+        .bind(("table", EVENTS_TABLE))
+        .bind(("_id", id.to_string()))
+        .await
+        .map_err(EventDBError::Db)?;
+
+    let event = query
+        .take::<Option<EventDB>>(0)
+        .map_err(EventDBError::Db)?
+        .ok_or(EventDBError::NotFound)?;
+
+    Ok(event)
 }
 
 #[cfg(test)]
@@ -82,7 +101,7 @@ mod db_tests {
         let mut rng = rand::thread_rng();
 
         for i in 0..100 {
-            insert_event(&EventDB::from(rng.gen(), i), db.clone())
+            insert_event(&EventDB::from(rng.gen(), i), &db)
                 .await
                 .expect("Failed to insert event");
         }
@@ -104,16 +123,19 @@ mod db_tests {
             .collect::<Vec<EventDB>>();
 
         for event in &events {
-            insert_event(event, db.clone())
+            let response = insert_event(event, &db)
                 .await
                 .expect("Failed to insert event");
+            assert_eq!(response.len(), 1);
+            assert_eq!(response[0], *event);
         }
 
-        let mut new_events = get_events(0, db.clone())
+        let mut new_events = get_events_since(0, &db)
             .await
             .expect("Failed to get events");
 
         new_events.sort_by(|a, b| a._id.cmp(&b._id));
+        assert_eq!(events.len(), new_events.len());
 
         for (event, new_event) in events.iter().zip(new_events.iter()) {
             assert_eq!(event, new_event);

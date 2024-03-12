@@ -25,9 +25,9 @@ impl Default for Event {
 impl Distribution<Event> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Event {
         Event {
-            author: random_string(rng.gen_range(3..100)),
-            machine: random_string(rng.gen_range(3..100)),
-            event: random_string(rng.gen_range(3..10000)),
+            author: random_string(rng.gen_range(1..3)),
+            machine: random_string(rng.gen_range(1..3)),
+            event: random_string(rng.gen_range(1..3)),
             time: chrono::Utc::now().naive_utc(),
         }
     }
@@ -42,6 +42,15 @@ impl From<EventDB> for Event {
             time: event.time,
         }
     }
+}
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub enum ClientMessage {
+    /// A message to add to the database.
+    NewEvent(Event),
+    /// A message that requests the event with the given id.
+    GetEvent(i64),
+    /// A message that requests all events since the given id.
+    GetSince(i64),
 }
 
 fn random_string(len: usize) -> String {
@@ -77,7 +86,8 @@ impl EventDB {
 pub enum EventDBError {
     Db(surrealdb::Error),
     NotFound,
-    Rmp,
+    RmpEncode(rmp_serde::encode::Error),
+    RmpDecode(rmp_serde::decode::Error),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -93,6 +103,15 @@ pub enum EventDBErrorSerde {
     Rmp,
 }
 
+impl From<EventDB> for EventDBResponse {
+    fn from(event: EventDB) -> Self {
+        Self {
+            id: event._id,
+            inner: Ok(Event::from(event)),
+        }
+    }
+}
+
 impl EventDBResponse {
     pub fn from_err(id: i64, e: EventDBError) -> Self {
         Self {
@@ -100,7 +119,7 @@ impl EventDBResponse {
             inner: Err(match e {
                 EventDBError::Db(e) => EventDBErrorSerde::Db(e.to_string()),
                 EventDBError::NotFound => EventDBErrorSerde::NotFound,
-                EventDBError::Rmp => EventDBErrorSerde::Rmp,
+                EventDBError::RmpEncode(_) | EventDBError::RmpDecode(_) => EventDBErrorSerde::Rmp,
             }),
         }
     }
