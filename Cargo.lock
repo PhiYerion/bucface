@@ -843,6 +843,7 @@ dependencies = [
  "futures",
  "futures-util",
  "log",
+ "parking_lot",
  "rand",
  "rmp-serde",
  "serde",

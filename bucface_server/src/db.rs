@@ -59,9 +59,9 @@ pub async fn get_event<T: surrealdb::Connection>(
     db: &Surreal<T>,
 ) -> Result<EventDB, EventDBError> {
     let mut query = db
-        .query("SELECT * FROM type::table($table) WHERE _id = $id")
+        .query("SELECT * FROM type::table($table) WHERE _id == type::number($id)")
         .bind(("table", EVENTS_TABLE))
-        .bind(("_id", id.to_string()))
+        .bind(("id", id))
         .await
         .map_err(EventDBError::Db)?;
 

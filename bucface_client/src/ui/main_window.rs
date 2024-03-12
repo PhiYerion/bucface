@@ -1,4 +1,4 @@
-use bucface_utils::{Event, EventDBErrorSerde};
+use bucface_utils::{Event, EventDB, EventDBErrorSerde};
 use egui::{Align, Layout, Rgba};
 
 use crate::app::App;
@@ -33,10 +33,11 @@ fn log_panel(ui: &mut egui::Ui, app: &mut App) {
         ui.label("Logs");
         if ui.button("Refresh").clicked() {
             app.logs.clear();
-            app.ws_client.get_logs_since(0);
+            app.log_ids.clear();
+            let _ = app.ws_client.get_logs_since(0);
         }
 
-        let print_event = |ui: &mut egui::Ui, event: &Event| {
+        let print_event = |ui: &mut egui::Ui, event: &EventDB| {
             ui.vertical(|ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(Rgba::from_rgb(0.0, 1.0, 0.5), &event.author);
@@ -47,23 +48,15 @@ fn log_panel(ui: &mut egui::Ui, app: &mut App) {
             });
         };
 
-        let print_error = |ui: &mut egui::Ui, error: &EventDBErrorSerde| {
+        /* let print_error = |ui: &mut egui::Ui, error: &EventDBErrorSerde| {
             ui.colored_label(Rgba::from_rgb(1., 0., 0.), format!("Error: {:?}", error));
-        };
+        }; */
 
         for log in &app.logs {
-            let text = |ui: &mut egui::Ui| match &log.inner {
-                Ok(event) => print_event(ui, event),
-                Err(e) => print_error(ui, e),
-            };
+            let text = |ui: &mut egui::Ui| print_event(ui, log);
 
             let time = |ui: &mut egui::Ui| {
-                match &log.inner {
-                    Ok(event) => {
-                        ui.colored_label(Rgba::from_rgb(0.5, 0.7, 0.9), event.time.to_string());
-                    }
-                    Err(_) => {}
-                };
+                ui.colored_label(Rgba::from_rgb(0.5, 0.7, 0.9), log.time.to_string())
             };
 
             ui.horizontal_wrapped(|ui| {

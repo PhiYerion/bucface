@@ -51,6 +51,7 @@ pub enum ClientMessage {
     GetEvent(u64),
     /// A message that requests all events since the given id.
     GetSince(u64),
+    Ping(String),
 }
 
 fn random_string(len: usize) -> String {
@@ -82,6 +83,14 @@ impl EventDB {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ServerResponse {
+    Event(EventDB),
+    Error(EventDBErrorSerde),
+    Pong(Vec<u8>),
+    Close(Vec<u8>),
+}
+
 #[derive(Debug)]
 pub enum EventDBError {
     Db(surrealdb::Error),
@@ -91,36 +100,18 @@ pub enum EventDBError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct EventDBResponse {
-    pub id: u64,
-    pub inner: Result<Event, EventDBErrorSerde>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum EventDBErrorSerde {
     Db(String),
     NotFound,
     Rmp,
 }
 
-impl From<EventDB> for EventDBResponse {
-    fn from(event: EventDB) -> Self {
-        Self {
-            id: event._id,
-            inner: Ok(Event::from(event)),
-        }
-    }
-}
-
-impl EventDBResponse {
-    pub fn from_err(id: u64, e: EventDBError) -> Self {
-        Self {
-            id,
-            inner: Err(match e {
-                EventDBError::Db(e) => EventDBErrorSerde::Db(e.to_string()),
-                EventDBError::NotFound => EventDBErrorSerde::NotFound,
-                EventDBError::RmpEncode(_) | EventDBError::RmpDecode(_) => EventDBErrorSerde::Rmp,
-            }),
+impl From<EventDBError> for EventDBErrorSerde {
+    fn from(e: EventDBError) -> Self {
+        match e {
+            EventDBError::Db(e) => Self::Db(e.to_string()),
+            EventDBError::NotFound => Self::NotFound,
+            EventDBError::RmpEncode(_) | EventDBError::RmpDecode(_) => Self::Rmp,
         }
     }
 }

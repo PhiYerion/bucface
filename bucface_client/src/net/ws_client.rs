@@ -1,6 +1,10 @@
+use std::sync::Arc;
+
 use bucface_utils::ws::WsStream;
-use bucface_utils::{ClientMessage, Event, EventDBResponse};
+use bucface_utils::{ClientMessage, Event, ServerResponse};
+use egui::Context;
 use futures_util::{SinkExt, StreamExt};
+use parking_lot::Mutex;
 use tokio_tungstenite::tungstenite;
 
 use super::ws_receiver::start_receiver;
@@ -31,7 +35,7 @@ pub struct Receiver {
     /// The thread that is taking and handling the responses from the server
     pub receiver: tokio::task::JoinHandle<()>,
     /// A channel to read from to get the responses from the server
-    pub rx: tokio::sync::mpsc::Receiver<EventDBResponse>,
+    pub rx: tokio::sync::mpsc::Receiver<ServerResponse>,
 }
 
 #[derive(Debug)]
@@ -43,14 +47,18 @@ pub struct Sender {
 }
 
 impl WsClient {
-    pub async fn new(dest: &str) -> Result<WsClient, WebSocketError> {
+    pub async fn new(dest: &str, egui_ctx: Arc<Mutex<Option<Context>>>) -> Result<WsClient, WebSocketError> {
         let stream = connect(dest).await?;
 
         let (mut write, mut read) = stream.split();
 
-        let (receiver_tx, receiver_rx) = tokio::sync::mpsc::channel::<EventDBResponse>(128);
+        let (receiver_tx, receiver_rx) = tokio::sync::mpsc::channel::<ServerResponse>(128);
         let receiver = tokio::spawn(async move {
-            match start_receiver(&mut read, &receiver_tx).await {
+            while !egui_ctx.lock().is_some() {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+            let egui_ctx = egui_ctx.lock().clone().unwrap();
+            match start_receiver(&mut read, &receiver_tx, egui_ctx).await {
                 Ok(_) => log::info!("WebSocket connection closed"),
                 Err(e) => log::error!("Error handling WebSocket connection: {:?}", e),
             }
@@ -91,14 +99,17 @@ impl WsClient {
             })
     }
 
-    pub fn get_buf_logs(&mut self, buf: &mut Vec<EventDBResponse>) -> Vec<u64> {
-        let mut new_log_ids: Vec<u64> = Vec::new();
-        while let Ok(log) = self.receiver.rx.try_recv() {
-            new_log_ids.push(log.id);
-            buf.push(log);
+    pub fn get_buf_logs<T>(
+        &mut self,
+        mut post: impl FnMut(ServerResponse) -> Option<T>,
+    ) -> Option<T> {
+        while let Ok(res) = self.receiver.rx.try_recv() {
+            if let Some(ret) = post(res) {
+                return Some(ret);
+            }
         }
 
-        new_log_ids
+        None
     }
 
     /// Gets all logs including and after the given id

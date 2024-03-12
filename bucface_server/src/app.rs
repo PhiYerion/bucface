@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use bucface_utils::{ClientMessage, EventDB, EventDBError};
@@ -37,26 +37,36 @@ pub async fn handle_client_message<T: surrealdb::Connection>(
     message: &[u8],
     db: &Surreal<T>,
     id_count: Arc<AtomicU64>,
-) -> Result<Vec<EventDB>, (EventDBError, u64)> {
-    let id = id_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+) -> Result<Vec<EventDB>, EventDBError> {
     let message: ClientMessage =
-        rmp_serde::decode::from_slice(message).map_err(|e| (EventDBError::RmpDecode(e), id))?;
+        rmp_serde::decode::from_slice(message).map_err(EventDBError::RmpDecode)?;
 
     match message {
         ClientMessage::NewEvent(event) => {
+            let id = id_count.fetch_add(1, Ordering::SeqCst);
+            log::debug!("Recieved insert event message");
             let server_event = EventDB::from(event, id);
-            let db_response = insert_event(&server_event, db).await.map_err(|e| (e, id))?;
+            let db_response = insert_event(&server_event, db).await.map_err(|e| {
+                log::error!("Error inserting event into database: {:?}", e);
+                id_count.fetch_sub(1, Ordering::SeqCst);
+                e
+            })?;
             assert_eq!(db_response.len(), 1);
             assert_eq!(db_response[0], server_event);
+            log::debug!("Inserted {server_event:?} into database");
             Ok(db_response)
         }
-        ClientMessage::GetEvent(id) => match get_event(id, db).await {
-            Ok(event) => Ok(vec![event]),
-            Err(e) => Err((e, id)),
-        },
-        ClientMessage::GetSince(timestamp) => {
-            get_events_since(timestamp, db).await.map_err(|e| (e, id))
+        ClientMessage::GetEvent(id) => {
+            log::debug!("Recieved get event message");
+            let event = get_event(id, db).await?;
+
+            Ok(vec![event])
         }
+        ClientMessage::GetSince(timestamp) => {
+            log::debug!("Recieved get since message");
+            get_events_since(timestamp, db).await
+        }
+        ClientMessage::Ping(_) => unreachable!("Should be covered in websocket.rs"),
     }
 }
 
