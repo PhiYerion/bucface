@@ -1,4 +1,4 @@
-use bucface_utils::{Event, EventDB, EventDBErrorSerde};
+use bucface_utils::EventDB;
 use egui::{Align, Layout, Rgba};
 
 use crate::app::App;

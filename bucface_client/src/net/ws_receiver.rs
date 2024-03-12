@@ -1,10 +1,9 @@
-use std::io;
-
 use bucface_utils::ws::WsFaucet;
 use bucface_utils::ServerResponse;
 use egui::Context;
 use futures_util::StreamExt;
 use rmp_serde::decode;
+use std::io;
 use tokio::sync::mpsc::{self, Sender};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -36,15 +35,13 @@ pub async fn start_receiver(
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum ReceiveEventError {
     Decode(decode::Error),
     Send(mpsc::error::SendError<ServerResponse>),
 }
 
-async fn receive_event(
-    tx: Sender<ServerResponse>,
-    data: Vec<u8>,
-) -> Result<(), ReceiveEventError> {
+async fn receive_event(tx: Sender<ServerResponse>, data: Vec<u8>) -> Result<(), ReceiveEventError> {
     let events =
         rmp_serde::from_slice::<ServerResponse>(&data).map_err(ReceiveEventError::Decode)?;
 

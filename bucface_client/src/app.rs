@@ -88,7 +88,9 @@ impl App<'_> {
                 ServerResponse::Event(event) => {
                     let id = event._id;
                     match self.log_ids.binary_search(&id) {
-                        Ok(_) => log::warn!("Attempting to insert log {id}, but we already have it"),
+                        Ok(_) => {
+                            log::warn!("Attempting to insert log {id}, but we already have it")
+                        }
                         Err(i) => {
                             self.log_ids.insert(i, id);
                             self.logs.insert(i, event);
@@ -121,7 +123,9 @@ impl App<'_> {
 
 impl eframe::App for App<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(mut egui_ctx) = self.egui_ctx.try_lock() && egui_ctx.is_none() {
+        if let Some(mut egui_ctx) = self.egui_ctx.try_lock()
+            && egui_ctx.is_none()
+        {
             *egui_ctx = Some(ctx.clone());
         }
 
@@ -131,7 +135,7 @@ impl eframe::App for App<'_> {
         });
         log::trace!("update took: {}ns", start.elapsed().as_nanos());
         let update_end = std::time::Instant::now();
-        self.get_logs();
+        let _ = self.get_logs();
         log::trace!("get_logs took: {}ns", update_end.elapsed().as_nanos());
         let get_logs_end = std::time::Instant::now();
         self.get_missing_logs();

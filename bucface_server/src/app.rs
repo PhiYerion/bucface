@@ -10,7 +10,8 @@ use crate::db::{get_event, get_events_since, insert_event};
 /// and echoing the updated [EventDB]s or returning the requested [EventDB]s.
 ///
 /// # Arguments
-/// * `buf` - A [rmp](rmp_serde) encoded slice of bytes representing a [Event]
+/// * `message` - A [rmp](rmp_serde) encoded slice of bytes representing a
+/// [ClientMessage]
 /// * `db` - A [Surreal](surrealdb::Surreal) database connection
 /// * `id_count` - A type of primary key for [EventDB] structs
 ///

@@ -1,8 +1,6 @@
-use bucface_utils::ws::{WsFaucet, WsSink};
 use bucface_utils::{EventDBErrorSerde, ServerResponse};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use parking_lot::Mutex;
 use std::io;
 use std::sync::atomic::AtomicU64;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -56,7 +54,7 @@ pub async fn handle_connection<T: surrealdb::Connection>(
 
 async fn start_sender(read: Receiver<ServerResponse>, sinks: Arc<sync::Mutex<Vec<ClientWsSink>>>) {
     while let Ok(res) = read.recv() {
-        for ( i, sink ) in sinks.lock().await.iter_mut().enumerate() {
+        for (i, sink) in sinks.lock().await.iter_mut().enumerate() {
             let result_encoded = rmp_serde::encode::to_vec(&res).expect("Error encoding response");
             match sink.send(Message::Binary(result_encoded)).await {
                 Ok(_) => {}
@@ -122,17 +120,13 @@ pub async fn start<T: surrealdb::Connection>(
         let mut clients_unlocked = clients.lock().await;
         clients_unlocked.push(write);
 
-        let clients_clone = clients.clone();
         let tx_clone = tx.clone();
         let db_clone = db.clone();
         let id_counter_clone = id_counter.clone();
         tokio::spawn(async move {
-            handle_connection(
-                read,
-                tx_clone,
-                db_clone,
-                id_counter_clone,
-            ).await.expect("Error handling connection");
+            handle_connection(read, tx_clone, db_clone, id_counter_clone)
+                .await
+                .expect("Error handling connection");
         });
     }
 
