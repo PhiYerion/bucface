@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use bucface_utils::ws::WsStream;
 use bucface_utils::{ClientMessage, Event, ServerResponse};
 use egui::Context;
 use futures_util::{SinkExt, StreamExt};
-use parking_lot::Mutex;
 use tokio_tungstenite::tungstenite;
+use url::Url;
 
 use super::ws_receiver::start_receiver;
 use super::ws_sender::start_sender;
@@ -19,6 +17,8 @@ pub enum ConnectionError {
 
 #[derive(Debug)]
 pub enum WebSocketError {
+    UrlParseError(url::ParseError),
+    NotWsUrl,
     Connection(ConnectionError),
     Soft(String),
     Hard(String),
@@ -47,17 +47,21 @@ pub struct Sender {
 }
 
 impl WsClient {
-    pub async fn new(dest: &str, egui_ctx: Arc<Mutex<Option<Context>>>) -> Result<WsClient, WebSocketError> {
-        let stream = connect(dest).await?;
+    pub async fn new(
+        dest: &str,
+        egui_ctx: Context,
+    ) -> Result<WsClient, WebSocketError> {
+        let url = dest.parse::<url::Url>().map_err(WebSocketError::UrlParseError)?;
+        if url.scheme() != "ws" {
+            return Err(WebSocketError::NotWsUrl);
+        }
+
+        let stream = connect(url).await?;
 
         let (mut write, mut read) = stream.split();
 
         let (receiver_tx, receiver_rx) = tokio::sync::mpsc::channel::<ServerResponse>(128);
         let receiver = tokio::spawn(async move {
-            while !egui_ctx.lock().is_some() {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            }
-            let egui_ctx = egui_ctx.lock().clone().unwrap();
             match start_receiver(&mut read, &receiver_tx, egui_ctx).await {
                 Ok(_) => log::info!("WebSocket connection closed"),
                 Err(e) => log::error!("Error handling WebSocket connection: {:?}", e),
@@ -153,18 +157,18 @@ pub async fn verify_conn(stream: &mut WsStream) -> Result<(), ConnectionError> {
     Err(ConnectionError::NoResponse)
 }
 
-async fn connect(dest: &str) -> Result<WsStream, WebSocketError> {
-    log::info!("Connecting to {}", dest);
-    let (mut stream, _) = tokio_tungstenite::connect_async(dest).await.map_err(|e| {
-        log::error!("Error connecting to {}: {:?}", dest, e);
-        WebSocketError::Hard(format!("Error connecting to {}: {:?}", dest, e))
+async fn connect(url: Url) -> Result<WsStream, WebSocketError> {
+    log::info!("Connecting to {}", url);
+    let (mut stream, _) = tokio_tungstenite::connect_async(&url).await.map_err(|e| {
+        log::error!("Error connecting to {}: {:?}", url, e);
+        WebSocketError::Hard(format!("Error connecting to {}: {:?}", url, e))
     })?;
 
     verify_conn(&mut stream).await.map_err(|e| {
         log::error!("Error verifying connection: {:?}", e);
         WebSocketError::Connection(e)
     })?;
-    log::trace!("Connected to {}", dest);
+    log::trace!("Connected to {}", url);
 
     Ok(stream)
 }

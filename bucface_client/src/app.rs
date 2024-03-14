@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use bucface_utils::{Event, EventDB, EventDBErrorSerde, ServerResponse};
-use parking_lot::Mutex;
+use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 
 use crate::net::ws_client::{WebSocketError, WsClient};
 use crate::ui::main_window::body;
@@ -12,43 +11,60 @@ pub struct State<'a> {
 }
 
 pub struct App<'a> {
+    pub runtime: Runtime,
     pub logs: Vec<EventDB>,
-    pub log_buf: String,
-    pub ws_client: WsClient,
+    pub ws_client: Option<WsClient>,
     pub state: State<'a>,
     pub log_ids: Vec<u64>,
-    pub egui_ctx: Arc<Mutex<Option<egui::Context>>>,
+    pub bufs: AppBufs,
+}
+
+pub struct AppBufs {
+    pub new_endpoint: Option<String>,
+    pub context: Option<egui::Context>,
+    pub log: String,
+    pub server: String,
+    pub port: String,
 }
 
 impl App<'_> {
-    pub fn new(ws_client: WsClient, egui_ctx: Arc<Mutex<Option<egui::Context>>>) -> Self {
+    pub fn new() -> Self {
         App {
+            runtime: Runtime::new().unwrap(),
             logs: Vec::new(),
-            log_buf: String::new(),
-            ws_client,
+            ws_client: None,
             state: State {
                 author: "Anonymous",
                 machine: "Unknown",
             },
             log_ids: Vec::new(),
-            egui_ctx,
+            bufs : AppBufs {
+                new_endpoint: Some("ws://localhost:8080".into()),
+                context: None,
+                log: String::new(),
+                server: String::from("localhost"),
+                port: String::from("8080"),
+            }
         }
     }
 
-    pub fn send_log(&mut self) -> Result<(), WebSocketError> {
+    pub fn send_log(&mut self) -> Option<Result<(), WebSocketError>> {
         let event = self.create_event_from_buf();
-        self.ws_client.send_log(event)?;
-        self.log_buf.clear();
+        let ws_client = self.ws_client.as_mut()?;
+        let _ = ws_client.send_log(event).map_err(Some);
+        self.bufs.log.clear();
 
-        Ok(())
+        Some(Ok(()))
     }
 
-    pub fn get_missing_logs(&mut self) -> usize {
+    pub fn get_missing_logs(&mut self) -> Option<usize> {
+        let ws_client = self.ws_client.as_mut()?;
+
         // id starts at 0, so we -1
         if self.logs.is_empty()
             || self.log_ids.len() - 1 == self.log_ids[self.log_ids.len() - 1] as usize
         {
-            return 0;
+            return Some(0);
         }
 
         log::debug!("There are {} logs in the logs vector", self.log_ids.len());
@@ -67,8 +83,7 @@ impl App<'_> {
             if self.log_ids[i] != id_cursor {
                 for id in id_cursor..self.log_ids[i] {
                     log::debug!("Getting missing log {id}");
-                    let _ = self
-                        .ws_client
+                    let _ = ws_client
                         .get_log(id)
                         .map_err(|e| log::error!("Error getting missing log: {e:?}"));
 
@@ -79,11 +94,12 @@ impl App<'_> {
         }
 
         assert_eq!(counter, missing_amt);
-        missing_amt
+        Some(missing_amt)
     }
 
-    pub fn get_logs(&mut self) -> Result<(), EventDBErrorSerde> {
-        self.ws_client.get_buf_logs(|response| {
+    pub fn get_logs(&mut self) -> Option<Result<(), EventDBErrorSerde>> {
+        let ws_client = self.ws_client.as_mut()?;
+        ws_client.get_buf_logs(|response| {
             match response {
                 ServerResponse::Event(event) => {
                     let id = event._id;
@@ -108,30 +124,39 @@ impl App<'_> {
         });
 
         assert_eq!(self.log_ids.len(), self.logs.len());
-        Ok(())
+        Some(Ok(()))
     }
 
     pub fn create_event_from_buf(&mut self) -> Event {
         bucface_utils::Event {
             time: chrono::Utc::now().naive_utc(),
             author: self.state.author.into(),
-            event: self.log_buf.clone(),
+            event: self.bufs.log.clone(),
             machine: self.state.machine.into(),
         }
+    }
+
+    pub fn clear_logs(&mut self) {
+        self.logs.clear();
+        self.log_ids.clear();
+    }
+
+    pub fn set_endpoint(&mut self, context: &egui::Context) -> Result<(), WebSocketError> {
+        let new_endpoint = format!("ws://{server}:{port}", server = self.bufs.server, port = self.bufs.port);
+        let context = context.clone();
+        let ws_client = self.runtime.block_on(WsClient::new(&new_endpoint, context))?;
+        self.ws_client = Some(ws_client);
+        self.bufs.new_endpoint = None;
+
+        Ok(())
     }
 }
 
 impl eframe::App for App<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(mut egui_ctx) = self.egui_ctx.try_lock()
-            && egui_ctx.is_none()
-        {
-            *egui_ctx = Some(ctx.clone());
-        }
-
         let start = std::time::Instant::now();
         egui::CentralPanel::default().show(ctx, |ui| {
-            body(ui, self);
+            body(ui, ctx, self);
         });
         log::trace!("update took: {}ns", start.elapsed().as_nanos());
         let update_end = std::time::Instant::now();

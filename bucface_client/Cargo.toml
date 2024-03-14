@@ -20,3 +20,4 @@ chrono = "0.4.34"
 parking_lot = "0.12.1"
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 futures-util = "0.3.30"
+url = "2.5.0"
