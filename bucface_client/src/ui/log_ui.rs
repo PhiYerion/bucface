@@ -2,6 +2,7 @@ use bucface_utils::EventDB;
 use egui::{Align, Layout, Rgba};
 
 use crate::app::App;
+use crate::net::ws_client::WebSocketStatus;
 
 pub fn log_entry(ui: &mut egui::Ui, app: &mut App) {
     ui.vertical(|ui| {
@@ -19,8 +20,10 @@ pub fn log_panel(ui: &mut egui::Ui, app: &mut App) {
         ui.label("Logs");
         if ui.button("Refresh").clicked() {
             app.clear_logs();
-            if let Some(ws_client) = &mut app.ws_client {
-                let _ = ws_client.get_logs_since(0);
+            if let WebSocketStatus::Connected(ws_client) = &mut app.ws_client {
+                if let Err(e) = ws_client.get_logs_since(0) {
+                    log::warn!("Error getting logs: {:?}", e);
+                }
             }
         }
 

@@ -46,6 +46,7 @@ pub async fn handle_client_message<T: surrealdb::Connection>(
         ClientMessage::NewEvent(event) => {
             let id = id_count.fetch_add(1, Ordering::SeqCst);
             log::debug!("Recieved insert event message");
+            log::debug!("Inserting {event:?} into database at {id}");
             let server_event = EventDB::from(event, id);
             let db_response = insert_event(&server_event, db).await.map_err(|e| {
                 log::error!("Error inserting event into database: {:?}", e);

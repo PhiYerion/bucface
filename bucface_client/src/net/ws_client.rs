@@ -1,7 +1,8 @@
 use bucface_utils::ws::WsStream;
-use bucface_utils::{ClientMessage, Event, ServerResponse};
+use bucface_utils::{ClientMessage, Event, EventDBErrorSerde, ServerResponse};
 use egui::Context;
 use futures_util::{SinkExt, StreamExt};
+use tokio::sync::mpsc::error::TrySendError;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
@@ -18,10 +19,28 @@ pub enum ConnectionError {
 #[derive(Debug)]
 pub enum WebSocketError {
     UrlParseError(url::ParseError),
-    NotWsUrl,
     Connection(ConnectionError),
-    Soft(String),
-    Hard(String),
+    NotWsUrl,
+    DoesNotExist,
+    SendError(TrySendError<ClientMessage>),
+    ServerError(EventDBErrorSerde),
+}
+
+#[derive(Debug)]
+pub enum WebSocketStatus {
+    Connected(WsClient),
+    Error(WebSocketError),
+    Disconnected,
+}
+
+impl ToString for WebSocketStatus {
+    fn to_string(&self) -> String {
+        match self {
+            WebSocketStatus::Connected(_) => "Connected".to_string(),
+            WebSocketStatus::Error(e) => format!("Error: {:?}", e),
+            WebSocketStatus::Disconnected => "Disconnected".to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -47,11 +66,10 @@ pub struct Sender {
 }
 
 impl WsClient {
-    pub async fn new(
-        dest: &str,
-        egui_ctx: Context,
-    ) -> Result<WsClient, WebSocketError> {
-        let url = dest.parse::<url::Url>().map_err(WebSocketError::UrlParseError)?;
+    pub async fn new(dest: &str, egui_ctx: Context) -> Result<WsClient, WebSocketError> {
+        let url = dest
+            .parse::<url::Url>()
+            .map_err(WebSocketError::UrlParseError)?;
         if url.scheme() != "ws" {
             return Err(WebSocketError::NotWsUrl);
         }
@@ -85,22 +103,16 @@ impl WsClient {
         })
     }
 
-    pub fn send_log(&mut self, log: Event) -> Result<(), WebSocketError> {
+    pub fn send_log(&self, log: Event) -> Result<(), TrySendError<ClientMessage>> {
         let message = ClientMessage::NewEvent(log);
-        self.sender.tx.try_send(message).map_err(|e| {
-            log::error!("Error sending log: {:?}", e);
-            WebSocketError::Soft("Error sending log".into())
-        })
+
+        self.sender.tx.try_send(message)
     }
 
-    pub fn get_log(&mut self, id: u64) -> Result<(), WebSocketError> {
+    pub fn get_log(&self, id: u64) -> Result<(), TrySendError<ClientMessage>> {
         self.sender
             .tx
             .try_send(ClientMessage::GetEvent(id))
-            .map_err(|e| {
-                log::error!("Error getting log: {:?}", e);
-                WebSocketError::Soft("Error sending get log request".into())
-            })
     }
 
     pub fn get_buf_logs<T>(
@@ -117,12 +129,10 @@ impl WsClient {
     }
 
     /// Gets all logs including and after the given id
-    pub fn get_logs_since(&mut self, since_id: u64) -> Result<(), WebSocketError> {
+    pub fn get_logs_since(&self, since_id: u64) -> Result<(), TrySendError<ClientMessage>> {
         let message = ClientMessage::GetSince(since_id);
-        self.sender.tx.try_send(message).map_err(|e| {
-            log::error!("Error sending get logs since request: {:?}", e);
-            WebSocketError::Soft("Error sending get logs since request".into())
-        })
+
+        self.sender.tx.try_send(message)
     }
 }
 
@@ -158,17 +168,17 @@ pub async fn verify_conn(stream: &mut WsStream) -> Result<(), ConnectionError> {
 }
 
 async fn connect(url: Url) -> Result<WsStream, WebSocketError> {
-    log::info!("Connecting to {}", url);
+    log::debug!("Connecting to {}", url);
+
     let (mut stream, _) = tokio_tungstenite::connect_async(&url).await.map_err(|e| {
-        log::error!("Error connecting to {}: {:?}", url, e);
-        WebSocketError::Hard(format!("Error connecting to {}: {:?}", url, e))
+        WebSocketError::Connection(ConnectionError::IOError(e))
     })?;
 
     verify_conn(&mut stream).await.map_err(|e| {
-        log::error!("Error verifying connection: {:?}", e);
         WebSocketError::Connection(e)
     })?;
-    log::trace!("Connected to {}", url);
+
+    log::info!("Connected to {}", url);
 
     Ok(stream)
 }

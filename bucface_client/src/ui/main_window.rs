@@ -24,7 +24,9 @@ fn server_entry(ui: &mut egui::Ui, ctx: &egui::Context, app: &mut App<'_>) {
         ui.label("Port");
         ui.text_edit_singleline(&mut app.bufs.port);
         if ui.button("Connect").clicked() {
-        app.set_endpoint(ctx);
+            app.set_endpoint(ctx);
         }
+        ui.label("Status");
+        ui.label(app.ws_client.to_string());
     });
 }
